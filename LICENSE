@@ -1,0 +1,66 @@
+MIT License
+
+Copyright (c) 2025 MDO Laboratory - AI Aerodynamic Design Assistant
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Third-Party Licenses
+
+This software uses the following third-party libraries:
+
+### NeuralFoil
+- License: MIT License
+- Copyright: Peter Sharpe and contributors
+- Repository: https://github.com/peterdsharpe/NeuralFoil
+
+### NumPy
+- License: BSD 3-Clause License
+- Copyright: NumPy Developers
+- Repository: https://github.com/numpy/numpy
+
+### Matplotlib
+- License: Matplotlib License (BSD-compatible)
+- Copyright: Matplotlib Development Team
+- Repository: https://github.com/matplotlib/matplotlib
+
+### SciPy
+- License: BSD 3-Clause License
+- Copyright: SciPy Developers
+- Repository: https://github.com/scipy/scipy
+
+### Pandas
+- License: BSD 3-Clause License
+- Copyright: Pandas Development Team
+- Repository: https://github.com/pandas-dev/pandas
+
+---
+
+## Acknowledgments
+
+This project builds upon decades of aerospace research and development:
+
+- **NACA Airfoil Research**: Foundational aerodynamic research from the National Advisory Committee for Aeronautics
+- **Neural Network Advances**: Modern deep learning techniques applied to computational fluid dynamics
+- **Open Source Community**: The Python scientific computing ecosystem that makes this work possible
+
+## Disclaimer
+
+This software is intended for educational and research purposes. For critical aerospace applications, always validate results with certified analysis tools and consult qualified aerospace engineers.

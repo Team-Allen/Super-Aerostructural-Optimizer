@@ -1,0 +1,27 @@
+# Core AI Engine
+neuralfoil>=0.1.0
+
+# Scientific Computing Stack
+numpy>=1.19.0
+scipy>=1.6.0
+matplotlib>=3.3.0
+pandas>=1.2.0
+
+# Data Structures (for Python < 3.7 compatibility)
+dataclasses>=0.8; python_version < "3.7"
+
+# Type Hints
+typing-extensions>=3.7.4
+
+# Progress Bars
+tqdm>=4.60.0
+
+# Optional: Enhanced visualization
+seaborn>=0.11.0
+
+# Optional: Better performance
+numba>=0.53.0
+
+# Optional: Jupyter support
+jupyter>=1.0.0
+jupyterlab>=3.0.0
