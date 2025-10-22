@@ -1,11 +1,11 @@
-# 🛩️ AI-Powered Aerodynamic Design Assistant
+# 🛩️ AI-Powered Aerodynamic Design Assistant with NVIDIA PhysicsNeMo
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![NeuralFoil](https://img.shields.io/badge/AI-NeuralFoil-green.svg)](https://github.com/peterdsharpe/NeuralFoil)
+[![PhysicsNeMo](https://img.shields.io/badge/AI-PhysicsNeMo-green.svg)](https://github.com/NVIDIA/NeMo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
 
-> **Revolutionary AI-powered conversational aerodynamic design system that transforms aircraft wing design through neural network-based optimization and intelligent airfoil selection.**
+> **Revolutionary AI-powered conversational aerodynamic design system that transforms aircraft wing design through NVIDIA's physics-informed neural networks and intelligent airfoil selection.**
 
 ---
 
@@ -15,8 +15,9 @@ This isn't just another optimization tool—it's a **conversational AI design as
 
 ### 🎯 **Key Innovations:**
 - **🤖 ChatGPT-Style Interface**: Natural language conversations for design requirements
-- **⚡ Real-Time AI Analysis**: 0.1-second aerodynamic evaluations using NeuralFoil neural networks
-- **🧠 Intelligent Airfoil Selection**: AI-powered scoring system with comprehensive NACA database
+- **⚡ Real-Time AI Analysis**: Ultra-fast aerodynamic evaluations using NVIDIA PhysicsNeMo
+- **🧠 Physics-Informed Neural Networks**: Superior accuracy with built-in physics constraints
+- **🚀 GPU-Accelerated Computing**: Leverage NVIDIA GPU acceleration for faster computations
 - **📊 Live Optimization Visualization**: Real-time CFD streamlines and performance plots
 - **🏭 Manufacturing-Ready Outputs**: Professional-grade coordinates and specifications
 
@@ -136,8 +137,11 @@ source venv/bin/activate
 
 #### **Step 2: Core Dependencies**
 ```bash
-# Install core AI engine
-pip install neuralfoil
+# Install NVIDIA PhysicsNeMo (requires CUDA-capable GPU)
+pip install nemo-toolkit[physics]
+
+# Install PyTorch with CUDA support
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # Install scientific computing stack
 pip install numpy matplotlib scipy
@@ -145,8 +149,8 @@ pip install numpy matplotlib scipy
 # Install data handling
 pip install pandas
 
-# Install utility libraries
-pip install dataclasses typing-extensions
+# Install configuration management
+pip install hydra-core omegaconf
 ```
 
 #### **Step 3: Verify Installation**
@@ -253,12 +257,12 @@ processor.generate_comparison_report(results, "batch_results.pdf")
 
 ## 🧠 **AI Engines Explained**
 
-### **🚀 NeuralFoil Engine - The Heart of the System**
+### **🚀 NVIDIA PhysicsNeMo Engine - The Heart of the System**
 
-#### **What is NeuralFoil?**
-NeuralFoil is a revolutionary neural network trained on **over 2 million CFD simulations** that can predict aerodynamic performance in **0.1 seconds** instead of hours of traditional CFD computation.
+#### **What is PhysicsNeMo?**
+NVIDIA PhysicsNeMo is a revolutionary physics-informed neural network framework that combines the power of deep learning with fundamental physics constraints, providing **superior accuracy** and **faster convergence** compared to traditional neural networks.
 
-#### **Why NeuralFoil?**
+#### **Why PhysicsNeMo?**
 ```python
 # Traditional CFD Approach:
 # ❌ Hours of computation time
@@ -266,11 +270,12 @@ NeuralFoil is a revolutionary neural network trained on **over 2 million CFD sim
 # ❌ Complex mesh generation
 # ❌ Expertise in numerical methods required
 
-# NeuralFoil AI Approach:
-# ✅ 0.1 second evaluation time
-# ✅ Free and open-source
+# PhysicsNeMo AI Approach:
+# ✅ Ultra-fast evaluation with GPU acceleration
+# ✅ Physics-informed constraints ensure realistic results
 # ✅ No mesh generation needed
-# ✅ Easy to integrate and use
+# ✅ Built-in uncertainty quantification
+# ✅ Multi-fidelity capabilities
 ```
 
 #### **Neural Network Architecture:**

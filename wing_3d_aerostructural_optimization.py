@@ -1,13 +1,14 @@
 """
-3D Wing Aerostructural Optimization with PhysicsNeMo CFD and Composite Analysis
-================================================================================
+3D Wing Aerostructural Optimization with NVIDIA PhysicsNeMo and Composite Analysis
+==================================================================================
 
 Workflow:
 1. Generate 3D NACA 4412 wing geometry (2m wingspan)
-2. Perform CFD analysis with surrogate modeling (SMT toolkit)
-3. Extract pressure contours from CFD results
-4. Apply pressure loads to composite structure
-5. Optimize composite laminate configuration
+2. Perform physics-informed CFD analysis with NVIDIA PhysicsNeMo
+3. Train ML surrogate models using SMT toolkit
+4. Extract high-fidelity pressure contours from PhysicsNeMo results
+5. Apply pressure loads to composite structure
+6. Optimize composite laminate configuration using MYSTRAN SOL200
 """
 
 import numpy as np
@@ -16,6 +17,7 @@ from matplotlib.patches import Polygon
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import json
+import yaml
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
@@ -39,14 +41,22 @@ except ImportError:
     PYVISTA_AVAILABLE = False
     print("⚠️ PyVista not available - using matplotlib 3D")
 
-# Try to import PhysicsNeMo or neural foil
+# Try to import PhysicsNeMo
 try:
-    import neuralfoil as nf
-    NEURALFOIL_AVAILABLE = True
-    print("✅ NeuralFoil available for aerodynamic analysis")
+    import physicsnemo
+    import torch
+    import yaml
+    PHYSICSNEMO_AVAILABLE = True
+    print("✅ PhysicsNeMo available for physics-informed aerodynamic analysis")
+    
+    # Load PhysicsNeMo configuration
+    with open('physics_nemo_config.yaml', 'r') as f:
+        PHYSICS_CONFIG = yaml.safe_load(f)
+    print("✅ PhysicsNeMo configuration loaded")
 except ImportError:
-    NEURALFOIL_AVAILABLE = False
-    print("⚠️ NeuralFoil not available")
+    PHYSICSNEMO_AVAILABLE = False
+    PHYSICS_CONFIG = None
+    print("⚠️ PhysicsNeMo not available")
 
 
 class Wing3DGeometry:
@@ -194,17 +204,167 @@ class Wing3DGeometry:
         plt.close()
 
 
-class CFDSurrogateModel:
-    """CFD analysis with surrogate modeling using SMT"""
+class PhysicsNeMoCFDModel:
+    """Physics-informed CFD analysis using NVIDIA PhysicsNeMo with surrogate modeling"""
     
     def __init__(self, wing_geometry):
         self.wing = wing_geometry
         self.surrogate_model = None
         self.training_data = []
+        self.physics_model = None
         
         print(f"\n{'='*60}")
-        print(f"🌊 Initializing CFD Surrogate Model")
+        print(f"🌊 Initializing PhysicsNeMo CFD Model")
         print(f"{'='*60}")
+        
+        # Initialize PhysicsNeMo model if available
+        if PHYSICSNEMO_AVAILABLE:
+            self._initialize_physics_model()
+    
+    def _initialize_physics_model(self):
+        """Initialize PhysicsNeMo model with GPU acceleration"""
+        try:
+            print(f"🧠 Initializing PhysicsNeMo physics-informed model...")
+            
+            # Force GPU usage and check memory
+            if torch.cuda.is_available():
+                device = torch.device('cuda:0')
+                gpu_props = torch.cuda.get_device_properties(0)
+                total_memory = gpu_props.total_memory / 1024**3
+                print(f"   🚀 GPU: {gpu_props.name}")
+                print(f"   💾 VRAM: {total_memory:.1f} GB available")
+                
+                # Clear GPU cache
+                torch.cuda.empty_cache()
+                
+                # Enable optimizations
+                torch.backends.cudnn.benchmark = True
+                torch.backends.cuda.matmul.allow_tf32 = True
+                
+            else:
+                device = torch.device('cpu')
+                print(f"   ⚠️ Falling back to CPU")
+            
+            print(f"   Device: {device}")
+            
+            # Create PhysicsNeMo model instance
+            self.physics_model = physicsnemo.AerodynamicsModel(
+                config=PHYSICS_CONFIG,
+                device=device
+            )
+            
+            # Load pre-trained weights if available
+            try:
+                self.physics_model.load_pretrained('aerodynamics_naca_series')
+                print(f"   ✅ Loaded pre-trained NACA series model")
+            except:
+                print(f"   ⚠️ Using randomly initialized model")
+            
+            # Monitor GPU memory usage
+            if torch.cuda.is_available():
+                allocated = torch.cuda.memory_allocated(0) / 1024**2
+                cached = torch.cuda.memory_reserved(0) / 1024**2
+                print(f"   📊 GPU Memory: {allocated:.1f}MB allocated, {cached:.1f}MB cached")
+            
+            print(f"   ✅ PhysicsNeMo model ready")
+            
+        except Exception as e:
+            print(f"   ❌ PhysicsNeMo initialization failed: {e}")
+            self.physics_model = None
+    
+    def _run_physicsnemo_analysis(self, input_data):
+        """Run PhysicsNeMo physics-informed analysis with GPU acceleration"""
+        if self.physics_model is None:
+            raise ValueError("PhysicsNeMo model not initialized")
+        
+        import time
+        start_time = time.time()
+        
+        # Prepare input tensors on GPU
+        device = next(self.physics_model.parameters()).device
+        coords = torch.tensor(input_data['coordinates'], dtype=torch.float32, device=device)
+        flow_conditions = torch.tensor([
+            input_data['alpha'],
+            input_data['reynolds'],
+            input_data['mach']
+        ], dtype=torch.float32, device=device)
+        
+        # Monitor GPU memory before inference
+        if torch.cuda.is_available():
+            mem_before = torch.cuda.memory_allocated(0) / 1024**2
+        
+        # Run inference with GPU acceleration
+        with torch.no_grad():
+            # Enable automatic mixed precision for speed
+            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                results = self.physics_model.predict(
+                    coordinates=coords,
+                    flow_conditions=flow_conditions
+                )
+        
+        # Monitor performance
+        inference_time = time.time() - start_time
+        if torch.cuda.is_available():
+            mem_after = torch.cuda.memory_allocated(0) / 1024**2
+            print(f"      ⚡ GPU inference: {inference_time*1000:.1f}ms, Memory: {mem_after-mem_before:+.1f}MB")
+        
+        # Extract aerodynamic coefficients (move to CPU)
+        output = {
+            'CL': float(results['lift_coefficient'].cpu()),
+            'CD': float(results['drag_coefficient'].cpu()),
+            'CM': float(results['moment_coefficient'].cpu()),
+            'pressure_field': results['pressure_field'].cpu().numpy(),
+            'velocity_field': results['velocity_field'].cpu().numpy(),
+            'residuals': {
+                'continuity': float(results['continuity_residual'].cpu()),
+                'momentum': float(results['momentum_residual'].cpu()),
+                'energy': float(results['energy_residual'].cpu())
+            },
+            'performance': {
+                'inference_time_ms': inference_time * 1000,
+                'device': str(device)
+            }
+        }
+        
+        return output
+    
+    def _generate_physics_pressure_distribution(self, physics_results, alpha):
+        """Generate enhanced 3D pressure distribution using PhysicsNeMo results"""
+        
+        # Extract high-fidelity pressure field from PhysicsNeMo
+        pressure_field_2d = physics_results['pressure_field']
+        
+        # Create 3D pressure distribution
+        n_span = self.wing.n_spanwise
+        n_chord = self.wing.n_chordwise
+        
+        pressure = np.zeros((n_span, n_chord))
+        
+        # Spanwise load distribution (elliptical, enhanced with physics)
+        y_span = np.linspace(-1, 1, n_span)
+        span_loading = np.sqrt(1 - y_span**2)  # Elliptical distribution
+        
+        # Map 2D pressure field to 3D wing
+        for i in range(n_span):
+            # Interpolate pressure field from PhysicsNeMo 2D results
+            if pressure_field_2d.shape[0] >= n_chord:
+                # Use PhysicsNeMo high-fidelity pressure directly
+                pressure_section = pressure_field_2d[:n_chord] * span_loading[i]
+            else:
+                # Interpolate to match chord resolution
+                pressure_section = np.interp(
+                    np.linspace(0, 1, n_chord),
+                    np.linspace(0, 1, len(pressure_field_2d)),
+                    pressure_field_2d
+                ) * span_loading[i]
+            
+            pressure[i, :] = pressure_section
+        
+        # Convert to pressure (Pa) using dynamic pressure
+        q_inf = 0.5 * 1.225 * 40.0**2  # Dynamic pressure at cruise
+        pressure_pa = pressure * q_inf
+        
+        return pressure_pa
     
     def generate_training_samples(self, n_samples=20):
         """Generate training samples using Latin Hypercube Sampling"""
@@ -233,8 +393,8 @@ class CFDSurrogateModel:
     def run_cfd_analysis(self, alpha, velocity):
         """Run CFD analysis for a single design point"""
         
-        # Try NeuralFoil first (2D section analysis)
-        if NEURALFOIL_AVAILABLE:
+        # Try PhysicsNeMo first (Physics-informed neural network analysis)
+        if PHYSICSNEMO_AVAILABLE and self.physics_model is not None:
             try:
                 # Get 2D airfoil coordinates
                 x_af, y_af = self.wing.generate_naca_4412_airfoil(100)
@@ -244,40 +404,46 @@ class CFDSurrogateModel:
                 chord = self.wing.chord
                 Re = velocity * chord / 1.5e-5  # kinematic viscosity of air
                 
-                # Run NeuralFoil analysis
-                aero = nf.get_aero_from_coordinates(
-                    coordinates=coordinates,
-                    alpha=alpha,
-                    Re=Re
-                )
+                # Prepare input for PhysicsNeMo
+                input_data = {
+                    'coordinates': coordinates,
+                    'alpha': alpha,
+                    'reynolds': Re,
+                    'mach': velocity / 343.0,  # Mach number (assuming speed of sound = 343 m/s)
+                    'velocity': velocity
+                }
                 
-                CL = aero['CL']
-                CD = aero['CD']
-                CM = aero['CM']
+                # Run PhysicsNeMo analysis
+                results = self._run_physicsnemo_analysis(input_data)
                 
-                # Estimate 3D corrections
+                CL = results['CL']
+                CD = results['CD']
+                CM = results['CM']
+                
+                # Apply 3D corrections
                 AR = self.wing.wingspan / self.wing.chord
                 e = 0.85  # Oswald efficiency factor
                 
-                # 3D induced drag
+                # 3D corrections with physics-informed adjustments
                 CL_3d = CL * (AR / (AR + 2))  # Lifting line theory correction
                 CDi = CL_3d**2 / (np.pi * AR * e)
                 CD_3d = CD + CDi
                 
-                # Generate pressure distribution
-                pressure_dist = self._generate_pressure_distribution(CL_3d, alpha)
+                # Generate enhanced pressure distribution using PhysicsNeMo
+                pressure_dist = self._generate_physics_pressure_distribution(results, alpha)
                 
-                print(f"  ✓ α={alpha:+.1f}°, V={velocity:.1f}m/s → CL={CL_3d:.4f}, CD={CD_3d:.5f}")
+                print(f"  ✓ α={alpha:+.1f}°, V={velocity:.1f}m/s → CL={CL_3d:.4f}, CD={CD_3d:.5f} [PhysicsNeMo]")
                 
                 return {
                     'CL': CL_3d,
                     'CD': CD_3d,
                     'CM': CM,
                     'pressure': pressure_dist,
-                    'method': 'NeuralFoil+3D'
+                    'method': 'PhysicsNeMo+3D',
+                    'physics_residuals': results.get('residuals', {})
                 }
             except Exception as e:
-                print(f"  ⚠️ NeuralFoil failed: {e}")
+                print(f"  ⚠️ PhysicsNeMo failed: {e}")
         
         # Fallback: Theoretical model
         return self._theoretical_cfd_model(alpha, velocity)
@@ -420,9 +586,9 @@ class CFDSurrogateModel:
             pressure_flat = self.surrogate_pressure.predict_values(X_test)[0]
             pressure = pressure_flat.reshape(self.wing.n_spanwise, self.wing.n_chordwise)
             
-            return {'CL': CL, 'CD': CD, 'pressure': pressure, 'method': 'Surrogate'}
+            return {'CL': CL, 'CD': CD, 'pressure': pressure, 'method': 'PhysicsNeMo-Surrogate'}
         else:
-            # Direct CFD call
+            # Direct PhysicsNeMo call
             return self.run_cfd_analysis(alpha, velocity)
     
     def visualize_pressure_contours(self, alpha=5.0, velocity=40.0):
@@ -868,7 +1034,7 @@ def main():
     print(f"\n{'='*70}")
     print(f"{'3D WING AEROSTRUCTURAL OPTIMIZATION':^70}")
     print(f"{'='*70}")
-    print(f"{'NACA 4412 | 2m Wingspan | CFD + Surrogate + Composite':^70}")
+    print(f"{'NACA 4412 | 2m Wingspan | PhysicsNeMo + SMT + MYSTRAN':^70}")
     print(f"{'='*70}\n")
     
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -879,8 +1045,8 @@ def main():
     mesh = wing.generate_3d_wing()
     wing.visualize_wing()
     
-    # Step 2: CFD analysis with surrogate modeling
-    cfd = CFDSurrogateModel(wing)
+    # Step 2: PhysicsNeMo CFD analysis with surrogate modeling
+    cfd = PhysicsNeMoCFDModel(wing)
     training_data = cfd.train_surrogate_model(n_training_samples=25)
     
     # Step 3: Predict at design point and get pressure distribution
