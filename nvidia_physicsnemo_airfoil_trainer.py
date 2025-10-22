@@ -15,6 +15,7 @@ from torch_geometric.nn import MessagePassing
 import matplotlib.pyplot as plt
 from pathlib import Path
 import time
+import os
 from tqdm import tqdm
 
 # Import NVIDIA PhysicsNeMo core
@@ -381,10 +382,23 @@ def train_physicsnemo_model():
     # Training loop
     num_epochs = 100
     best_val_loss = float('inf')
+    start_epoch = 0
+    
+    # Resume from checkpoint if exists
+    checkpoint_path = 'physicsnemo_checkpoint.pth'
+    if os.path.exists(checkpoint_path):
+        print(f"📂 Found checkpoint, resuming training...\n")
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch']
+        best_val_loss = checkpoint['best_val_loss']
+        print(f"✅ Resumed from epoch {start_epoch}, best val loss: {best_val_loss:.6f}\n")
     
     print("🏋️  Starting Training with Maximum GPU Utilization...\n")
     
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         model.train()
         train_loss = 0.0
         
@@ -422,6 +436,18 @@ def train_physicsnemo_model():
         scheduler.step()
         
         print(f"Epoch {epoch+1}: Train Loss = {avg_train_loss:.6f}, Val Loss = {avg_val_loss:.6f}, LR = {scheduler.get_last_lr()[0]:.6f}")
+        
+        # Save checkpoint every epoch
+        checkpoint = {
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_val_loss': best_val_loss,
+            'train_loss': avg_train_loss,
+            'val_loss': avg_val_loss
+        }
+        torch.save(checkpoint, 'physicsnemo_checkpoint.pth')
         
         # Save best model
         if avg_val_loss < best_val_loss:
