@@ -1,0 +1,2 @@
+surrogate_pred:6.880595684051514
+jax_validated:7.055458068847656

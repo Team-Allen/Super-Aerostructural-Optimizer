@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "super-aerostructural-optimizer"
+version = "0.1.0"
+description = "Hybrid differentiable aerostructural optimizer (JAX + OpenMDAO)"
+authors = ["Team Allen <devnull@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+jax = "*"
+jaxlib = "*"
+openmdao = ">=3.30"
+mphys = "*"
+numpy = "*"
+scipy = "*"
+torch = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
