@@ -1,0 +1,69 @@
+{
+  "wing": {
+    "half_span_m": 5.0,
+    "root_chord_m": 1.6,
+    "taper_ratio": 0.45,
+    "sweep_deg": 18.0,
+    "dihedral_deg": 3.0,
+    "twist_root_deg": 2.0,
+    "twist_tip_deg": -3.0,
+    "n_span": 14,
+    "n_chord": 5
+  },
+  "flight": {
+    "mach": 0.18,
+    "velocity_ms": 60.0,
+    "altitude_m": 1500.0,
+    "alpha_deg": 2.0,
+    "target_cl": 0.45,
+    "trim_alpha_min_deg": -3.0,
+    "trim_alpha_max_deg": 12.0,
+    "trim_tol": 0.001,
+    "trim_max_iter": 30
+  },
+  "structure": {
+    "density_kg_m3": 1600.0,
+    "youngs_modulus_pa": 52000000000.0,
+    "poisson_ratio": 0.31,
+    "yield_stress_pa": 800000000.0,
+    "thickness_root_m": 0.025,
+    "thickness_tip_m": 0.008,
+    "thickness_min_m": 0.002,
+    "thickness_max_m": 0.08,
+    "ks_weight": 50.0,
+    "tip_deflection_limit_m": 0.8,
+    "tacs_dv_scale": 100.0,
+    "tacs_print_timing": false
+  },
+  "coupling": {
+    "elastic_scheme": "rbf",
+    "max_iterations": 12,
+    "convergence_tol": 0.03,
+    "load_relaxation": 0.65,
+    "displacement_relaxation": 0.55,
+    "meld_npts": 30,
+    "meld_beta": 0.5,
+    "aero_z_offset_m": 0.03
+  },
+  "optimizer": {
+    "enabled": true,
+    "fallback_sequence": ["IPOPT", "SLSQP", "PSQP"],
+    "max_iterations": 80,
+    "tolerance": 1e-05,
+    "twist_root_delta_min_deg": -6.0,
+    "twist_root_delta_max_deg": 6.0,
+    "twist_tip_delta_min_deg": -8.0,
+    "twist_tip_delta_max_deg": 8.0,
+    "thickness_root_scale_min": 0.6,
+    "thickness_root_scale_max": 1.5,
+    "thickness_tip_scale_min": 0.6,
+    "thickness_tip_scale_max": 1.6
+  },
+  "output": {
+    "results_dir": "results/real_physics",
+    "case_name": "real_physics_mdo",
+    "write_tacs_solution": true,
+    "save_history": true,
+    "save_optimizer_db": true
+  }
+}

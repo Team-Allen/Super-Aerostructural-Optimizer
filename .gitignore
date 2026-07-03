@@ -276,3 +276,12 @@ system_info.txt
 ../aerodynamic_*.json
 ../optimized_airfoil*.dat
 ../wing_design*.txt
+
+# Real-physics pipeline generated artifacts
+run_real_physics_mdo_out/
+results/real_physics/generated/
+results/real_physics/**/generated/
+results/real_physics/debug_wing.bdf
+results/real_physics/*_opt_cases.sql
+results/real_physics/live/
+test_real_physics_e2e_out/
