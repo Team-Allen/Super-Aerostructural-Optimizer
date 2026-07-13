@@ -1,0 +1,33 @@
+{
+  "N_ITERS": 150,
+  "N_ZONES": 8,
+  "TARGET_FI": 0.8,
+  "PLY_ANGLES": [
+    0.0,
+    45.0,
+    -45.0,
+    90.0
+  ],
+  "PLY_THICKNESS": 0.000131,
+  "MIN_PLIES_PER_ANGLE": 1,
+  "MAX_PLIES_PER_ANGLE": 20,
+  "MIN_SCALE": 0.3,
+  "MAX_SCALE": 2.5,
+  "FSD_DAMPING": 0.5,
+  "N_PLY_UPDATE_EVERY": 5,
+  "PLY_ADD_THRESHOLD": 1.2,
+  "PLY_REMOVE_THRESHOLD": 0.5,
+  "MAT_XT": 2326000000.0,
+  "MAT_XC": 1200000000.0,
+  "MAT_YT": 62300000.0,
+  "MAT_YC": 199800000.0,
+  "MAT_S": 92300000.0,
+  "HERE": "F:\\PIML-MDO-Pipeline\\mdo-tools/su2_validation",
+  "WORKDIR": "F:\\PIML-MDO-Pipeline\\mdo-tools/su2_validation\\production_run_realshape",
+  "BDF_PATH": "F:\\PIML-MDO-Pipeline\\mdo-tools/su2_validation\\production_run_realshape\\wingshell.bdf",
+  "LOG_CSV": "F:\\PIML-MDO-Pipeline\\mdo-tools/su2_validation\\production_run_realshape\\iteration_log.csv",
+  "LOG_JSON": "F:\\PIML-MDO-Pipeline\\mdo-tools/su2_validation\\production_run_realshape\\iteration_log.jsonl",
+  "CONFIG_PATH": "F:\\PIML-MDO-Pipeline\\mdo-tools/su2_validation\\production_run_realshape\\run_config.json",
+  "BDF_ARCHIVE_DIR": "F:\\PIML-MDO-Pipeline\\mdo-tools/su2_validation\\production_run_realshape\\bdf_archive",
+  "TEMPLATE_BDF": "F:\\PIML-MDO-Pipeline\\mdo-tools/su2_validation\\production_run_realshape\\bdf_archive\\template.bdf"
+}

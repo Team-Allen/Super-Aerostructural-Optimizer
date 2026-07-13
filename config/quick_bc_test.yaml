@@ -1,0 +1,45 @@
+project:
+  name: "Quick_BC_Test"
+  output_dir: "results"
+
+aero:
+  solver: "neuralfoil"
+  neuralfoil_model_size: "small"
+
+wing:
+  semi_span: 10.0
+  chord_root: 2.5
+  chord_tip: 1.0
+  sweep_deg: 25.0
+  initial_airfoil: "NACA2412"
+
+structure:
+  n_beam_elements: 5
+  material: "CFRP_IM7_8552"
+  layup: "quasi_isotropic"
+
+flight:
+  velocity: 100.0
+  altitude: 3000.0
+  cl_target: 0.5
+
+optimization:
+  method: "L-BFGS-B"
+  max_iterations: 1
+  n_cst_upper: 2
+  n_cst_lower: 2
+  n_twist_stations: 3
+  n_laminate_stations: 2
+  n_ply_angles: 4
+  optimize_layup: false
+
+constraints:
+  max_failure_index: 0.8
+  max_tip_deflection: 2.0
+  min_thickness: 0.08
+  max_thickness: 0.20
+
+output:
+  run_name: "quick_bc_test"
+  vtk_export: false
+  paraview_screenshots: false

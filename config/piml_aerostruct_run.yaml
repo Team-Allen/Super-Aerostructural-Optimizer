@@ -1,0 +1,96 @@
+# PIML Aerostructural MDO Pipeline Configuration — Actual aircraft Wing
+# ================================================================
+# Derived from the aircraft MDO design space (MDO/config/wing_design_space.csv)
+# and the aircraft DESIGN COMPARISON reference document.
+#
+# Baseline aircraft wing chosen near the MDO feasible median:
+#   Full span     : 12.0 m   (design space 8–16 m)
+#   Root chord    : 4.5 m    (design space 2.5–6.5 m)
+#   Tip chord     : 1.5 m    (design space 0.8–3.0 m)
+#   LE sweep      : 35 deg   (design space 25–55 deg)
+#   Cruise Mach   : 0.85
+#   Cruise alt    : 10 000 m (within troposphere for the ISA model used here)
+#
+# At these conditions:
+#   V  = 0.85 * a(10 km) ≈ 255 m/s
+#   q  = 0.5 * rho * V^2 ≈ 1.34e4 Pa
+#   S  = 2 * 6.0 * (4.5 + 1.5) / 2 ≈ 36.0 m^2
+#   CL = 0.30  =>  L = q * S * CL ≈ 1.45e5 N  =>  m ≈ 14.8 t
+# This is inside the feasible aircraft GTOW envelope (6.5–17.7 t).
+
+project:
+  name: "Aircraft_Wing_Aerostructural_Optimization"
+  output_dir: "results"
+
+# Aerodynamic Solver
+aero:
+  solver: "neuralfoil"
+  neuralfoil_model_size: "xlarge"
+  pinn_pretrained: null
+
+  openaerostruct_with_viscous: true
+  openaerostruct_num_x: 5
+  openaerostruct_num_y: 9
+
+  surrogate_cfd_model_dir: "results/surrogate_cfd"
+  surrogate_cfd_n_samples: 80
+  surrogate_cfd_hidden_layers: [128, 64, 32]
+  surrogate_cfd_retrain: false
+
+# Wing Geometry (actual aircraft baseline)
+wing:
+  semi_span: 6.0       # Half of 12 m full span
+  chord_root: 4.5
+  chord_tip: 1.5
+  sweep_deg: 35.0
+  initial_airfoil: "NACA2412"
+
+# Structural Model
+structure:
+  n_beam_elements: 20
+  material: "CFRP_IM7_8552"
+  layup: "thick_wing_skin"       # [±45/0_4/90/0_4/±45]s, 26-ply baseline for high-load wing
+  structural_solver: "vam"       # "clt" | "vam" | "surrogate"
+  mystran_exe: null              # Set to absolute path if not auto-detected
+  structural_surrogate_path: null  # e.g. "results/structural_doe/surrogate.pt"
+  generate_structural_doe: false   # Run offline DOE + surrogate training
+
+# Flight Condition (Aircraft cruise)
+flight:
+  velocity: 255.0      # Mach 0.85 at 10 000 m
+  altitude: 10000.0
+  cl_target: 0.30
+
+# Optimization
+optimization:
+  method: "COBYLA"
+  max_iterations: 50
+
+  n_cst_upper: 3
+  n_cst_lower: 3
+  n_twist_stations: 3
+  n_struct_sizing: 3
+  n_laminate_stations: 3
+  n_ply_angles: 4
+  optimize_layup: true
+
+  coupling_max_iterations: 5
+  coupling_tolerance: 1.0e-3
+  coupling_relaxation: 0.5
+
+# Constraints
+constraints:
+  max_failure_index: 0.8
+  max_tip_deflection: 1.5
+  min_thickness: 0.08
+  max_thickness: 0.20
+  load_factor_ultimate: 2.5
+
+# Output and visualization
+output:
+  run_name: null
+  vtk_export: true
+  paraview_screenshots: true
+  screenshot_width: 1920
+  screenshot_height: 1080
+  pvpython_path: null

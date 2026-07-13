@@ -1,0 +1,40 @@
+# Quick test configuration for PIML MDO Pipeline validation
+# Smaller wing and fewer elements so a short optimization completes rapidly.
+
+project:
+  name: "PIML_MDO_Quick_Test"
+  output_dir: "results/quick_test"
+
+aero:
+  solver: "neuralfoil"
+  neuralfoil_model_size: "small"
+
+wing:
+  semi_span: 6.0
+  chord_root: 1.5
+  chord_tip: 0.6
+  sweep_deg: 20.0
+  initial_airfoil: "NACA2412"
+
+structure:
+  n_beam_elements: 6
+  material: "CFRP_IM7_8552"
+  layup: "quasi_isotropic"
+
+flight:
+  velocity: 80.0
+  altitude: 2000.0
+  cl_target: 0.5
+
+optimization:
+  method: "L-BFGS-B"
+  max_iterations: 5
+  n_cst_upper: 6
+  n_cst_lower: 6
+  n_twist_stations: 5
+
+constraints:
+  max_failure_index: 0.8
+  max_tip_deflection: 1.0
+  min_thickness: 0.08
+  max_thickness: 0.20

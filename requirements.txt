@@ -1,27 +1,27 @@
-# Core AI Engine
-neuralfoil>=0.1.0
+# PIML Aerostructural MDO Pipeline — Dependencies
+# =================================================
 
-# Scientific Computing Stack
-numpy>=1.19.0
-scipy>=1.6.0
-matplotlib>=3.3.0
-pandas>=1.2.0
+# Core scientific computing
+numpy>=1.24.0
+scipy>=1.10.0
 
-# Data Structures (for Python < 3.7 compatibility)
-dataclasses>=0.8; python_version < "3.7"
+# Aerodynamic surrogate
+neuralfoil>=0.2.0
 
-# Type Hints
-typing-extensions>=3.7.4
+# Machine learning (PINN solver)
+torch>=2.0.0
 
-# Progress Bars
-tqdm>=4.60.0
+# Visualization
+matplotlib>=3.7.0
 
-# Optional: Enhanced visualization
-seaborn>=0.11.0
+# Configuration
+pyyaml>=6.0
 
-# Optional: Better performance
-numba>=0.53.0
+# Optional: enhanced optimization
+# pyoptsparse  # Install separately — requires Fortran compiler
 
-# Optional: Jupyter support
-jupyter>=1.0.0
-jupyterlab>=3.0.0
+# Optional: OpenMDAO integration
+# openmdao>=3.30.0
+
+# Development
+tqdm>=4.65.0

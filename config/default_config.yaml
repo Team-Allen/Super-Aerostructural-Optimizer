@@ -1,0 +1,71 @@
+# PIML Aerostructural MDO Pipeline Configuration
+# ================================================
+
+project:
+  name: "PIML_MDO_Wing_Optimization"
+  output_dir: "results"
+
+# Aerodynamic Solver
+aero:
+  solver: "neuralfoil"           # "neuralfoil" (fast), "pinn" (high-fidelity),
+                                  # "openaerostruct" (VLM), or "surrogate_cfd" (MLP)
+  neuralfoil_model_size: "xlarge" # "small", "medium", "large", "xlarge"
+  pinn_pretrained: null           # Path to pretrained PINN weights
+
+  openaerostruct_with_viscous: true
+  openaerostruct_num_x: 5          # Chordwise VLM panels
+  openaerostruct_num_y: 9          # Spanwise VLM nodes (must be odd)
+
+  surrogate_cfd_model_dir: "results/surrogate_cfd"
+  surrogate_cfd_n_samples: 60      # DOE samples for surrogate training
+  surrogate_cfd_hidden_layers: [128, 64, 32]
+  surrogate_cfd_retrain: false
+
+# Wing Geometry
+wing:
+  semi_span: 15.0                # Semi-span [m]
+  chord_root: 3.5                # Root chord [m]
+  chord_tip: 1.4                 # Tip chord [m]
+  sweep_deg: 25.0                # Quarter-chord sweep [deg]
+  initial_airfoil: "NACA2412"    # Starting airfoil
+
+# Structural Model
+structure:
+  n_beam_elements: 20
+  material: "CFRP_IM7_8552"     # "CFRP_T300_5208", "CFRP_IM7_8552", "AL_7075_T6"
+  layup: "quasi_isotropic"       # "quasi_isotropic", "wing_skin", "spar_cap"
+  structural_solver: "vam"       # "clt", "vam", or "surrogate"
+  structural_surrogate_path: null # defaults to results/structural_doe/surrogate.pt
+
+# Flight Condition (Cruise)
+flight:
+  velocity: 100.0                # [m/s]
+  altitude: 3000.0               # [m]
+  cl_target: 0.5                 # Required lift coefficient
+
+# Optimization
+optimization:
+  method: "L-BFGS-B"            # "L-BFGS-B", "SLSQP", "differential_evolution"
+  max_iterations: 100
+  n_cst_upper: 6                 # CST shape params (upper surface)
+  n_cst_lower: 6                 # CST shape params (lower surface)
+  n_twist_stations: 5            # Spanwise twist DVs
+  n_laminate_stations: 5          # Spanwise laminate stackup DVs
+  n_ply_angles: 4                 # 0, 45, -45, 90
+  optimize_layup: true            # Optimize ply counts per station
+
+# Constraints
+constraints:
+  max_failure_index: 0.8
+  max_tip_deflection: 2.0        # [m]
+  min_thickness: 0.08            # t/c ratio
+  max_thickness: 0.20
+
+# Output and visualization
+output:
+  run_name: null                 # Defaults to project.name
+  vtk_export: true               # Write .vtk files for ParaView
+  paraview_screenshots: true     # Generate PNG screenshots with pvpython
+  screenshot_width: 1920
+  screenshot_height: 1080
+  pvpython_path: null            # Optional absolute path to pvpython/pvbatch
