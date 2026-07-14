@@ -82,17 +82,23 @@ def symmetric_coordinates(t_c: float, n_points: int, chord: float) -> np.ndarray
 
 def build_wing_mesh(output_path: str, n_sections: int = 9, tip_washout_deg: float = 0.0,
                      rans_mode: bool = False, rans_wall_size: float = 0.02,
-                     rans_wall_dist: float = 0.03):
+                     rans_wall_dist: float = 0.03, mid_washout_deg: float = None):
     """Loft a wing surface through spanwise NACA sections, embed in a farfield
     box, and generate an unstructured tet volume mesh with a boundary-layer
     field for RANS wall resolution.
 
     Args:
-        tip_washout_deg: linear geometric twist from 0 at root to this value
-            at the tip (negative = washout, the standard convention). Each
-            section is rotated about its own local quarter-chord point, so
-            twist changes local angle of attack without changing the
-            planform's leading-edge sweep line.
+        tip_washout_deg: geometric twist at the tip [deg] (negative = washout).
+        mid_washout_deg: geometric twist at 50% semi-span [deg]. If None,
+            twist is linear from root (0) to tip, same as before (backward
+            compatible). If given, twist is piecewise-linear through
+            [root=0, mid=mid_washout_deg, tip=tip_washout_deg] -- the same
+            2-control-point parameterization used by the VLM DOE screening
+            (doe_vlm_screening.py), so SU2 refinement solves the identical
+            design variable, not an approximation of it.
+        Each section is rotated about its own local quarter-chord point, so
+        twist changes local angle of attack without changing the planform's
+        leading-edge sweep line.
     """
     gmsh.initialize()
     gmsh.model.add("wing")
@@ -106,7 +112,11 @@ def build_wing_mesh(output_path: str, n_sections: int = 9, tip_washout_deg: floa
         chord = CHORD_ROOT + (CHORD_TIP - CHORD_ROOT) * eta
         t_c = TC_ROOT + (TC_TIP - TC_ROOT) * eta
         x_le = y * np.tan(np.radians(SWEEP_DEG))
-        twist_deg = tip_washout_deg * eta
+        if mid_washout_deg is None:
+            twist_deg = tip_washout_deg * eta
+        else:
+            twist_deg = np.interp(y, [0.0, SEMI_SPAN * 0.5, SEMI_SPAN],
+                                   [0.0, mid_washout_deg, tip_washout_deg])
 
         coords = symmetric_coordinates(t_c, N_AIRFOIL_PTS, chord)
         if twist_deg != 0.0:
@@ -223,5 +233,6 @@ if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "mesh_wing.su2"
     n_sections = int(sys.argv[2]) if len(sys.argv) > 2 else 9
     twist = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
-    n_nodes = build_wing_mesh(out, n_sections, tip_washout_deg=twist)
-    print(f"Wrote {out}: {n_nodes} nodes (tip washout {twist} deg)")
+    mid_twist = float(sys.argv[4]) if len(sys.argv) > 4 else None
+    n_nodes = build_wing_mesh(out, n_sections, tip_washout_deg=twist, mid_washout_deg=mid_twist)
+    print(f"Wrote {out}: {n_nodes} nodes (tip washout {twist} deg, mid washout {mid_twist})")
