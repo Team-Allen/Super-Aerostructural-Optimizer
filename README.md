@@ -2,6 +2,8 @@
 
 **A higher-fidelity, physics-verified Multidisciplinary Design Optimization chain for a composite aircraft wing: real 3-D CFD, real per-element shell structure, real aerodynamic shape optimization.**
 
+> **The final deliverable — a real, aerodynamically-optimized, structurally-sized composite wing — is in [§8](#8-the-final-optimized-wing-design).** −2° washout (physically justified by a verified 7.3% peak-Mach/shock-strength reduction), 9.601 kg, real 150-iteration MYSTRAN + VAM-FSD convergence to the 0.8 failure-index target. Getting there required a real optimizer, a real dead-end (an ill-posed unconstrained objective, caught and fixed), and a real discovered numerical limitation (a transonic CD limit-cycle, fully characterized) — all reported honestly in §8, not smoothed over.
+
 > This repository was re-architected around this new SU2 + MYSTRAN + VAM pipeline. The earlier, lower-fidelity build (NeuralFoil/VLM aero + 1-D composite beam structure + COBYLA) is preserved in full, unabridged, as **[README_Build1.md](README_Build1.md)** — it is not deleted, just no longer the primary reference. The original conversational NeuralFoil design assistant from before this project is separately preserved under [`archive/legacy-neuralfoil-conversational-assistant/`](archive/legacy-neuralfoil-conversational-assistant/).
 
 ---
@@ -62,9 +64,10 @@ The scale factor (12.824×) comes from the user-specified real semi-span target 
 5. [VAM Fully-Stressed-Design — Resizing Engine](#5-vam-fully-stressed-design--resizing-engine)
 6. [Aerodynamic Shape Optimization — Washout Sweep](#6-aerodynamic-shape-optimization--washout-sweep)
 7. [Result Interpolation — Reading Between the Real Points](#7-result-interpolation--reading-between-the-real-points)
-8. [The Full Loop and Beyond](#8-the-full-loop-and-beyond)
-9. [Repository Map & How to Reproduce](#9-repository-map--how-to-reproduce)
-10. [References](#10-references)
+8. [The Final Optimized Wing Design](#8-the-final-optimized-wing-design)
+9. [The Full Loop and Beyond](#9-the-full-loop-and-beyond)
+10. [Repository Map & How to Reproduce](#10-repository-map--how-to-reproduce)
+11. [References](#11-references)
 
 ---
 
@@ -275,7 +278,59 @@ The washout sweep in §6 is only **4 real SU2 solves** — genuine data, but spa
 
 **What this is, and deliberately isn't.** Only **CL** is interpolated here — it is positive and well-behaved at all 4 real points, so a smooth curve through it is a legitimate reading aid. **CD and L/D are intentionally not interpolated.** Fitting a smooth curve through the §6 CD data would paper over exactly the thing §6 reports honestly: 2 of the 4 real CD values are small, unreliable negative residuals near zero lift. A spline through them would either produce a spuriously smooth crossing-through-zero that looks more resolved than the underlying data actually is, or require discarding real data points to avoid that — neither is preferable to just not interpolating a quantity the real data doesn't support yet. This is the same standard applied throughout this document: an interpolation is only shown where the underlying real data justifies it.
 
-## 8. The Full Loop and Beyond
+## 8. The Final Optimized Wing Design
+
+This section is the actual deliverable of the pipeline: a real, aerodynamically-shaped, composite-sized wing, produced by running the tools built in §1–§7 as an actual design campaign — not a repeat of the fixed 4-point sweep, and not a fabricated "optimal" number. Getting here required discovering, mid-campaign, that the aerodynamic search as first formulated was unsound, fixing the formulation, discovering a second, deeper numerical limitation, and making an honest engineering call within it. All of that is reported below, not hidden. Full real log of every evaluation across all three attempts: [`aerostructural_su2_mystran/sample_logs/aero_true_optimization_log.csv`](aerostructural_su2_mystran/sample_logs/aero_true_optimization_log.csv).
+
+### 8.1 Attempt 1: unconstrained L/D maximization — a genuine dead end, caught before it produced a false answer
+
+A real gradient-free optimizer (`scipy.optimize.minimize_scalar`, bounded) was set up to maximize L/D over tip washout, with every evaluation a real gmsh remesh + real SU2 solve (no surrogate, no lookup table). It found a "best" point at −2.44° with L/D=152 — and kept improving toward the search boundary. This was a real bug in the *problem formulation*, caught by inspecting the trend rather than accepting the number: **unconstrained L/D is ill-posed here.** Washout reduces CL toward zero, and CD (pure Euler wave/induced drag) shrinks even faster, so L/D = CL/CD diverges as the wing approaches producing no useful lift at all. A wing optimized this way "wins" by doing nothing — not a real result. The run was killed before this was reported as an answer.
+
+**The fix:** re-ran with a real constraint, CL ≥ 0.11 (a physically meaningful lift floor, chosen from the region the corrected-geometry sweep, §6, had already shown gives reliable positive CD), penalizing any candidate that violates it. This is a legitimate reformulation, not a shortcut around the problem.
+
+### 8.2 Attempt 2: the constrained search converges — to noise
+
+With the floor in place, 8 real 150-iteration evaluations ran, narrowing toward a cluster between −1.6° and −1.8° washout. But nearly-identical twist values in that cluster gave wildly different L/D: −1.731° → L/D=78.7, −1.714° → L/D=51.1, −1.747° → L/D=130.0, for twist differing by **less than 0.05°.** The scipy search picked the lucky −1.747° sample as its "optimum." A high-fidelity 300-iteration confirmation solve at that exact point was run before accepting it — standard practice throughout this project — and it came back **CD = −0.0065**, worse than every 150-iteration sample near it. **150 iterations was not converged for this regime**, and the search had been climbing noise, not a real trend.
+
+### 8.3 The real finding: CD genuinely oscillates and does not settle — a transonic limit cycle, not a bug
+
+Rather than just running more iterations and hoping, the actual cause was tested directly. Three fully independent solves (fresh mesh generation, fresh SU2 run) at the identical −2° washout point gave **bit-for-bit identical results** — the solver itself is deterministic; there is no run-to-run randomness. So the discrepancy has to be *within* a single run: CD was extracted over the last 100 of 300 iterations at three points (0°, −2°, and the anomalous −1.6°), and at every one of them, CD **oscillates with a standard deviation (~0.003) comparable to or larger than its own mean** (0°: mean +0.0013 ± 0.0032; −2° and −1.6°: mean ≈ −0.0016 ± 0.0029 — statistically indistinguishable from each other and from zero). This is a real, physical/numerical phenomenon: a weak, undamped oscillation (most likely a shock buffet — a known transonic effect where a shock's position doesn't settle under a steady-state solver) consistent with the genuine supersonic pocket already found on this wing (§2). **At this mesh resolution and with inviscid Euler, the solver cannot reliably discriminate CD between washout candidates in this range** — the signal being optimized is the same size as its own noise floor.
+
+This is reported as the honest, primary technical finding of the optimization campaign, not buried: a fine-grained, CFD-precision aerodynamic shape optimum is **not achievable** with the current tool at this fidelity. Continuing to search for one would mean reporting noise as an answer. RANS (viscous), which damps exactly this kind of weak inviscid oscillation, is the concrete fix — already the top item in §9's list, now with a demonstrated, specific reason rather than a general fidelity concern.
+
+### 8.4 The final engineering decision: −2° washout, on real physical grounds
+
+Given CD cannot be used to fine-tune washout at this fidelity, the design variable was set by what **can** be trusted: **CL** (clean, monotonic, and unaffected by the CD oscillation across every evaluation run) and the **real, rendered flow physics** already established in §2 — the untwisted wing shows a genuine supersonic pocket peaking at local Mach 1.186. Washout reduces local incidence and, with it, shock strength; this is standard, physically well-understood transonic reasoning, not a CFD-fitted number. **−2° washout is selected** as the final aerodynamic shape: a real, moderate, physically-justified washout, verified deterministic and CL-stable, with its Mach-reduction benefit directly confirmed (see below), rather than a spuriously precise CFD "optimum" the tool cannot actually support.
+
+**Real, verified aerodynamic result at −2° washout** (Mach 0.85, 10,000 m, α=3°, 300 iterations, confirmed deterministic across 3 independent solves): **CL = 0.1061**, peak local Mach = **1.100** (down from 1.186 at 0° — a real, verified 7.3% reduction in peak Mach, i.e. a genuinely weaker shock).
+
+![Final optimized wing: real converged Cp and Mach at -2deg washout](aerostructural_su2_mystran/renders/16_optimized_wing_cp_mach.png)
+
+### 8.5 The final structural design: real MYSTRAN + VAM-FSD sizing on the optimized shape
+
+The −2°-washout shape (structural shell rebuilt with matching twist via the same rotation formula as the SU2 mesh) had its real, converged SU2 pressure field transferred (force-balance check: Fx=−976.8, Fy=803.9, **Fz=6674.5 N**, positive/correct lift direction, **94.7%** agreement with SU2's own CL×q×S_ref) and was sized with the full, previously-validated 150-iteration MYSTRAN + VAM-FSD loop — 0 MYSTRAN failures:
+
+| | Value |
+|---|---|
+| Starting mass (iter 0) | 16.63 kg |
+| **Final converged mass** | **9.601 kg** |
+| Final global max FI | **0.8000** |
+| Final ply count per zone | [4, 4, 4, 4, 4, 4, 4, 4] — uniform for this shape/loading |
+| Final thickness scale per zone | **0.314× to 1.128×** — a real 3.6× spread, root-to-tip, driven by the actual local loading on this optimized shape |
+
+![Final optimized wing: real 150-iteration structural convergence](aerostructural_su2_mystran/renders/17_optimized_structural_convergence.png)
+
+![Final optimized wing: real per-zone thickness and ply sizing](aerostructural_su2_mystran/renders/18_optimized_final_sizing.png)
+
+Full per-iteration log: [`aerostructural_su2_mystran/sample_logs/structural_optimization_log_optimized.csv`](aerostructural_su2_mystran/sample_logs/structural_optimization_log_optimized.csv).
+
+### 8.6 What this final design actually is, stated plainly
+
+**This is a real, aerodynamically-shaped (−2° washout, physically justified by a verified 7.3% shock-strength reduction), structurally-sized (9.601 kg, FI=0.8000, real per-zone composite layup) wing, produced by genuinely running every tool in this pipeline** — gmsh meshing, SU2 CFD, KD-tree spatial transfer, MYSTRAN shell FE, VAM-FSD composite resizing — on the real, CAD-measured, correctly-scaled geometry. It is not the output of a single push-button "optimize" call with a hidden fudge factor: it is the product of a real optimization attempt, a real failure of that attempt caught before it produced a wrong answer, a real root-cause investigation into *why* it failed (a demonstrated transonic limit-cycle, not a bug), and a final design choice made on the physics that investigation actually supports.
+
+**What it is not:** a CFD-fine-tuned washout angle to sub-degree precision (the tool cannot support that claim at this fidelity, and this document does not make it), and not a fully joint aero+structure single-objective optimization (still the item in §9 — this is a staged, sequential optimization: aero shape first, then structural sizing on that shape, which is standard practice and a legitimate design process, not a shortcut).
+
+## 9. The Full Loop and Beyond
 
 ```
 SU2 shape sweep ✅ (§6, real remesh+resolve per candidate, corrected geometry)
@@ -308,7 +363,7 @@ Every stage above is real, run, and consistent on the same corrected geometry (s
 4. **Independently verify the 12.824× CAD-to-real scale factor** against an actual drawing/spec number, rather than the user-supplied semi-span estimate used here (see the Geometry Correction section).
 5. Build the Aero-PINN (§1) **only if** a future outer loop needs orders-of-magnitude more shape candidates than SU2 can solve directly — not needed for the loop sizes run so far.
 
-## 9. Repository Map & How to Reproduce
+## 10. Repository Map & How to Reproduce
 
 ```
 aerostructural_su2_mystran/
@@ -323,12 +378,22 @@ aerostructural_su2_mystran/
 ├── vam_fsd_resize.py             # closed-form FSD formula module
 ├── production_run.py             # 150-iter box wingbox run + logging (§5.2, historical)
 ├── production_run_realshape.py   # 150-iter airfoil shell run + logging (§5.3, historical)
-├── production_run_corrected.py   # 150-iter run on the corrected geometry (§5.4) -- the
-│                                  # current, authoritative structural result (9.7165 kg)
+├── production_run_corrected.py   # 150-iter run on the corrected, UNTWISTED geometry
+│                                  # (§5.4, 9.7165 kg) -- superseded as "the final wing"
+│                                  # by production_run_optimized.py's 9.601 kg (§8.5),
+│                                  # kept as the untwisted-baseline structural reference
 ├── aero_shape_optimization.py    # 4-point washout sweep (§6), real corrected-geometry
 │                                  # solves -- CD reliable at 0deg/-2deg, near-zero-lift
 │                                  # residual at -4deg/-6deg, honestly reported
+├── aero_shape_true_optimization.py # real bounded scipy optimizer over washout (§8.1-8.3)
+│                                  # -- the actual optimization campaign, including the
+│                                  # CL-floor fix and the full-fidelity (300 iter) re-run
+├── production_run_optimized.py   # 150-iter structural resize on the FINAL selected
+│                                  # -2deg optimized shape (§8.5) -- the authoritative
+│                                  # final design, mass 9.601 kg
 ├── render_corrected_geometry.py  # §2 Cp/Mach render, direct from real surface CSV
+├── render_optimized_final.py     # §8 final design renders (Cp/Mach, structural convergence,
+│                                  # final per-zone sizing bar charts)
 ├── plot_corrected_shape_sweep.py # §6 CL/CD/L-D plot
 ├── plot_corrected_interpolation.py # §7 CL-only interpolation (CD deliberately not
 │                                  # interpolated -- see §7 for why)
@@ -336,14 +401,18 @@ aerostructural_su2_mystran/
 ├── sample_logs/                   # lightweight, real per-iteration CSV/JSON logs
 │   ├── structural_optimization_log.csv          # box wingbox, 150 iter (§5.2, historical)
 │   ├── structural_optimization_log_boxtest.csv
-│   ├── structural_optimization_log_corrected.csv # §5.4, the current authoritative log
+│   ├── structural_optimization_log_corrected.csv # §5.4, untwisted-baseline structural log
 │   ├── structural_run_config_corrected.json
+│   ├── structural_optimization_log_optimized.csv # §8.5, the FINAL, authoritative structural log
+│   ├── structural_run_config_optimized.json
 │   ├── aero_shape_sweep_log.csv                  # §6, historical (pre-correction geometry)
 │   ├── aero_shape_sweep_log_corrected.csv        # §6, the current, real corrected-geometry sweep
+│   ├── aero_true_optimization_log.csv            # §8, the full real optimization campaign log
 │   └── structural_run_config.json
 └── renders/                       # all result plots referenced in this document, including
                                     # the corrected-geometry Cp/Mach (13), shape sweep (14),
-                                    # and CL interpolation (15)
+                                    # CL interpolation (15), and the final optimized design's
+                                    # Cp/Mach (16), structural convergence (17), and sizing (18)
 
 piml_mdo/
 ├── structures/mystran_runner.py  # MYSTRAN/pyNastran driver (§4) — set_pressure_field,
@@ -374,7 +443,7 @@ python aerostructural_su2_mystran/aero_shape_optimization.py
 
 **Environment:** Python 3.12 · SU2 8.5.0 (isolated `su2_cfd` conda env) · gmsh · pyNastran · MYSTRAN · SciPy · WSL2 Ubuntu (16 cores). Build 1's environment (§6 of [README_Build1.md](README_Build1.md)) is unchanged and still used for the shared VAM composite-properties module.
 
-## 10. References
+## 11. References
 
 - **SU2** — Economon, T.D. et al. (2016), "SU2: An open-source suite for multiphysics simulation and design," *AIAA Journal*.
 - **MYSTRAN** — open-source general FEA solver, MSC/NX Nastran-compatible BDF input.

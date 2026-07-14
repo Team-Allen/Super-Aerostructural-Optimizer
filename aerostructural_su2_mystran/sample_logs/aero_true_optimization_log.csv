@@ -1,0 +1,21 @@
+phase,eval,twist_deg,n_iter_su2,exit_ok,cl,cd,ld,note
+attempt1_unconstrained,1,-1.9777087639996638,150,True,0.117661,0.001671,70.41352483542789,killed after eval3 -- unconstrained L/D objective is ill-posed, diverges toward zero lift
+attempt1_unconstrained,2,-1.2222912360003368,150,True,0.136814,0.003532,38.73556058890147,
+attempt1_unconstrained,3,-2.4445824720006732,150,True,0.102239,0.000672,152.14136904761904,L/D still climbing toward search boundary -- the red flag that stopped this attempt
+attempt2_cl_floored,1,-1.6068883707497268,150,True,0.121686,0.002354,51.693288020390824,CL floor 0.11 added; search now physically meaningful
+attempt2_cl_floored,2,-0.9931116292502736,150,True,0.135661,0.004277,31.718728080430207,
+attempt2_cl_floored,3,-1.9862232585005468,150,True,0.117346,0.002356,49.807300509337864,
+attempt2_cl_floored,4,-1.7307486528253713,150,True,0.122074,0.001552,78.65592783505154,
+attempt2_cl_floored,5,-1.793703509705033,150,True,0.119812,0.001819,65.86695986805937,
+attempt2_cl_floored,6,-1.7140819604875535,150,True,0.120167,0.00235,51.13489361702127,near-duplicate twist of eval4, very different L/D -- first noise signal
+attempt2_cl_floored,7,-1.747415345163189,150,True,0.119361,0.000918,130.02287581699346,scipy selected this as the "optimum" -- 150 iter was not converged
+attempt2_cl_floored,8,-1.7650958507413257,150,True,0.119548,0.00137,87.26131386861314,
+attempt2_cl_floored,final_confirm_300iter,-1.747415345163189,300,True,0.110968,-0.006452,,300-iter confirmation of eval7's "optimum" flips to CD<0 -- 150 iter search was chasing under-convergence noise
+attempt3_full_fidelity,1,-1.6068883707497268,300,True,0.117167,-0.005139,,even 300 iter does not settle: raw log at iter150-210 was POSITIVE (~+0.002 to +0.0028) before drifting negative by iter 299 -- killed to investigate root cause
+diagnostic_determinism_check,run1,-2.0,300,True,0.10606,-0.00157,,
+diagnostic_determinism_check,run2,-2.0,300,True,0.10606,-0.00157,identical to run1 to all reported digits -- solver is deterministic, not randomly noisy
+diagnostic_determinism_check,run3,-2.0,300,True,0.10606,-0.00157,identical to run1/run2 -- confirms the issue is intra-run CD oscillation, not run-to-run randomness
+diagnostic_tail_average_last100iter,0deg_baseline,0.0,300,True,0.15590,0.00128,,mean of last 100 iterations; stdev 0.00318 -- CD statistically indistinguishable from zero
+diagnostic_tail_average_last100iter,-2deg_selected,-2.0,300,True,0.10606,-0.00157,,mean of last 100 iterations; stdev 0.00288
+diagnostic_tail_average_last100iter,-1.6deg_anomalous,-1.6068883707497268,300,True,0.11845,-0.00158,,mean of last 100 iterations; stdev 0.00288 -- essentially identical mean to -2deg despite different twist
+final_selected_design,verified,-2.0,300,True,0.10606,,,selected on physical grounds (Sec8.4): real Mach reduction 1.186->1.100, CL clean and stable; CD not used to fine-tune within this band since it cannot be resolved at this fidelity (Sec8.3)

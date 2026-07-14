@@ -6,7 +6,7 @@ Multiple spanwise zones, each with an independent PCOMP composite layup.
 
 Geometry corrected to match the real CAD reference
 (Reference Docs/MYSTRAN/PipeLine_Building/Wing_Surface_Cleaned.stp /
-aircraft_Wing_Surface_6_Good_Mesh.bdf), measured directly with gmsh's OCC kernel
+Wing_Surface_6_Good_Mesh.bdf), measured directly with gmsh's OCC kernel
 on the actual surfaces (not assumed): CAD semi-span 0.23394 m, root chord
 0.20955 m, tip chord 0.04888 m, LE sweep 26.8 deg (from real LE points, not
 assumed), symmetric section (zero camber at every station sampled), t/c
@@ -85,6 +85,7 @@ def build_wing_shell_bdf(
     zone_ply_counts=None,
     ply_thickness: float = 0.000131,
     mat_props=None,
+    tip_washout_deg: float = 0.0,
 ) -> dict:
     mat_props = mat_props or dict(E1=171e9, E2=9.08e9, nu12=0.32, G12=5.29e9, G1z=5.29e9, G2z=5.29e9, rho=1580.0)
     if zone_ply_counts is None:
@@ -120,7 +121,21 @@ def build_wing_shell_bdf(
         chord = CHORD_ROOT + (CHORD_TIP - CHORD_ROOT) * eta
         t_c = TC_ROOT + (TC_TIP - TC_ROOT) * eta
         x_le = y * np.tan(np.radians(SWEEP_DEG))
+        twist_deg = tip_washout_deg * eta
         coords = symmetric_coordinates(t_c, N_AIRFOIL_PTS, chord)
+        if twist_deg != 0.0:
+            # Rotate about the local quarter-chord point, identical to
+            # generate_wing_mesh.py's twist treatment, so the structural
+            # shell and the SU2 aero mesh share the same real twisted shape.
+            theta = np.radians(twist_deg)
+            c, s = np.cos(theta), np.sin(theta)
+            x_qc = 0.25 * chord
+            xr = coords[:, 0] - x_qc
+            zr = coords[:, 1]
+            coords = np.column_stack([
+                xr * c + zr * s + x_qc,
+                -xr * s + zr * c,
+            ])
         if n_perim_nodes is None:
             n_perim_nodes = len(coords)
         for j, (x_local, z_local) in enumerate(coords):
