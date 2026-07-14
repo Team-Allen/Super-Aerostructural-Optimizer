@@ -1,16 +1,28 @@
 """
-Real aircraft wing skin structural shell mesh -- NACA2412 airfoil cross-section
-(same geometry as the SU2 CFD mesh), lofted along the real 6 m semi-span with
-real taper (4.5m root -> 1.5m tip chord) and 35-degree sweep. Multiple
-spanwise zones, each with an independent PCOMP composite layup.
+Real aircraft wing skin structural shell mesh -- symmetric airfoil cross-section
+(same geometry as the SU2 CFD mesh), lofted along the real 3.0 m semi-span
+with real taper (2.688m root -> 0.627m tip chord) and 26.8-degree sweep.
+Multiple spanwise zones, each with an independent PCOMP composite layup.
+
+Geometry corrected to match the real CAD reference
+(Reference Docs/MYSTRAN/PipeLine_Building/Wing_Surface_Cleaned.stp /
+aircraft_Wing_Surface_6_Good_Mesh.bdf), measured directly with gmsh's OCC kernel
+on the actual surfaces (not assumed): CAD semi-span 0.23394 m, root chord
+0.20955 m, tip chord 0.04888 m, LE sweep 26.8 deg (from real LE points, not
+assumed), symmetric section (zero camber at every station sampled), t/c
+6.67% at root -> 7.56% at tip. Scaled by 12.824x to the real target semi-span
+of 3.0 m. The earlier build used an assumed 6m-semi-span, 4.5/1.5m-chord,
+35-degree-sweep, cambered-NACA2412 planform that was never checked against
+this CAD file -- this was caught and fixed after the mass output (72 kg)
+was flagged as implausible for the actual aircraft scale.
 
 This replaces two earlier stand-ins, honestly:
   1. The rectangular-box wingbox approximation (build_multizone_wingbox.py)
      -- real airfoil shape now, not an artificial box cross-section.
   2. The user's Composite_Wing.txt reference file -- real CAD-derived mesh,
-     but at the wrong physical scale (~0.8m x 0.6m panel, not the 12m-span
-     aircraft wing) and isotropic (MAT1), not a true composite layup. Not used
-     as the structural model here for that reason.
+     but isotropic (MAT1), not a true composite layup, and previously
+     unreconciled in scale. This script now derives its planform directly
+     from the same CAD lineage, scaled to the real aircraft.
 
 The mesh is a thin-walled closed-perimeter shell (upper + lower skin as one
 continuous CQUAD4 loop per span station) -- a standard semi-monocoque
@@ -31,49 +43,33 @@ from pyNastran.bdf.cards.elements.shell import CQUAD4
 from pyNastran.bdf.cards.properties.shell import PCOMP
 from pyNastran.bdf.cards.materials import MAT8
 
-SEMI_SPAN = 6.0
-CHORD_ROOT = 4.5
-CHORD_TIP = 1.5
-SWEEP_DEG = 35.0
-AIRFOIL = "2412"
+SEMI_SPAN = 3.0
+CHORD_ROOT = 2.688
+CHORD_TIP = 0.627
+SWEEP_DEG = 26.8
+TC_ROOT = 0.0667   # measured from real CAD mesh, root station
+TC_TIP = 0.0756    # measured from real CAD mesh, tip station
 N_AIRFOIL_PTS = 20  # polygonal (not spline) -- matches the lesson learned
                      # building the SU2 volume mesh: fewer points, more robust.
 
 
-def naca4_coordinates(code: str, n_points: int, chord: float) -> np.ndarray:
-    """Closed-loop NACA 4-digit coordinates (TE -> upper -> LE -> lower -> TE),
+def symmetric_coordinates(t_c: float, n_points: int, chord: float) -> np.ndarray:
+    """Closed-loop symmetric-airfoil coordinates (TE -> upper -> LE -> lower -> TE),
     scaled by chord. Identical formulation to generate_wing_mesh.py, so
     the structural shell and the SU2 aero mesh share the same real airfoil
-    shape."""
-    m = int(code[0]) / 100.0
-    p = int(code[1]) / 10.0
-    t = int(code[2:]) / 100.0
-
+    shape. NACA00xx thickness envelope with t/c set per span station from the
+    real CAD measurement -- the real wing section is symmetric (zero camber
+    at every sampled station), not the cambered NACA2412 assumed earlier."""
     beta = np.linspace(0.0, np.pi, n_points // 2 + 1)
     x = 0.5 * (1.0 - np.cos(beta))
 
-    yt = 5 * t * (
+    yt = 5 * t_c * (
         0.2969 * np.sqrt(x) - 0.1260 * x - 0.3516 * x**2 + 0.2843 * x**3 - 0.1015 * x**4
     )
-    yt[-1] = 0.0
+    yt[-1] = 0.05 * yt.max()  # blunt TE, matches generate_wing_mesh.py
 
-    if m > 0:
-        yc = np.where(x < p, (m / p**2) * (2 * p * x - x**2),
-                      (m / (1 - p) ** 2) * ((1 - 2 * p) + 2 * p * x - x**2))
-        dyc = np.where(x < p, (2 * m / p**2) * (p - x),
-                       (2 * m / (1 - p) ** 2) * (p - x))
-    else:
-        yc = np.zeros_like(x)
-        dyc = np.zeros_like(x)
-    theta = np.arctan(dyc)
-
-    xu = x - yt * np.sin(theta)
-    yu = yc + yt * np.cos(theta)
-    xl = x + yt * np.sin(theta)
-    yl = yc - yt * np.cos(theta)
-
-    upper = np.column_stack([xu, yu])
-    lower = np.column_stack([xl[::-1][1:-1], yl[::-1][1:-1]])
+    upper = np.column_stack([x, yt])
+    lower = np.column_stack([x[::-1][:-1], -yt[::-1][:-1]])
     loop = np.vstack([upper, lower]) * chord
     return loop
 
@@ -101,7 +97,7 @@ def build_wing_shell_bdf(
     model.sol = 101
     model.case_control_deck = CaseControlDeck(
         [
-            "TITLE = Real aircraft Wing Skin (NACA2412, real taper/sweep)",
+            "TITLE = Real aircraft Wing Skin (CAD-derived symmetric section, real taper/sweep)",
             "SUBTITLE = Build 2 aerostructural production run",
             f"SPC = {spc_set_id}",
             f"LOAD = {load_set_id}",
@@ -122,8 +118,9 @@ def build_wing_shell_bdf(
     for i, y in enumerate(y_stations):
         eta = y / SEMI_SPAN
         chord = CHORD_ROOT + (CHORD_TIP - CHORD_ROOT) * eta
+        t_c = TC_ROOT + (TC_TIP - TC_ROOT) * eta
         x_le = y * np.tan(np.radians(SWEEP_DEG))
-        coords = naca4_coordinates(AIRFOIL, N_AIRFOIL_PTS, chord)
+        coords = symmetric_coordinates(t_c, N_AIRFOIL_PTS, chord)
         if n_perim_nodes is None:
             n_perim_nodes = len(coords)
         for j, (x_local, z_local) in enumerate(coords):

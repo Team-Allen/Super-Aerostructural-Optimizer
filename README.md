@@ -22,6 +22,39 @@ Build 2's core chain — **SU2 → spatial transfer → MYSTRAN → VAM-FSD resi
 
 ---
 
+## Geometry Correction — A Critical Fix (read this first)
+
+**Everything below this section reflects a corrected wing geometry.** The first version of Build 2 used an *assumed* planform (semi-span 6 m, root/tip chord 4.5 m/1.5 m, 35° sweep, cambered NACA2412) carried over unedited from Build 1's config — it was never checked against any real CAD reference, and it produced a structural mass of 72.17 kg that was flagged, correctly, as implausible for the actual aircraft scale.
+
+**The fix — measured, not assumed.** The real CAD surface (`Wing_Surface_Cleaned.stp`, the source geometry behind the mesh iterations in the project's CAD reference archive) was loaded with gmsh's own OpenCASCADE kernel — not parsed by hand from raw text — and its actual analytic bounding box and edges were measured directly:
+
+| Quantity | Real CAD (measured) | Scaled to the real aircraft (12.824×) |
+|---|---|---|
+| Semi-span | 0.2339 m | **3.0 m** |
+| Root chord | 0.2096 m | **2.688 m** |
+| Tip chord | 0.0489 m | **0.627 m** |
+| LE sweep | 26.8° (from real LE points, not assumed) | 26.8° |
+| Section | Symmetric (zero camber at every station sampled), t/c 6.67%→7.56% | same |
+
+The scale factor (12.824×) comes from the user-specified real semi-span target of 3.0 m — a decision made explicitly, not inferred silently.
+
+**A second bug found while re-running SU2 on the corrected geometry.** The corrected mesh's much smaller absolute chord, combined with a *mathematically sharp* (exactly zero-thickness) trailing edge in the symmetric-section formula, produced a **spurious negative CD** in the Euler solve (−0.017 at first, improving to −0.008 with mesh refinement, but never crossing to positive). This was diagnosed properly, not hand-waved: the same negative value appeared under two fundamentally different numerical schemes (JST central-difference and ROE upwind), which rules out solver/scheme error and isolates the cause to the geometry itself. The fix was a standard **blunt trailing edge** (5% of local thickness, a real closing edge between explicit upper/lower TE points, not a cosmetic tweak) — after which CD crossed to a small, genuinely positive value, verified by re-reading the converged solution state directly (not a log artifact).
+
+**The real, final numbers on the corrected geometry**, reported throughout the rest of this document:
+
+| | Superseded (wrong assumed geometry) | **Corrected (real, scaled CAD geometry)** |
+|---|---|---|
+| Semi-span / root / tip chord | 6.0 m / 4.5 m / 1.5 m (assumed) | **3.0 m / 2.688 m / 0.627 m (measured + scaled)** |
+| Section | Cambered NACA2412 (assumed) | **Symmetric, 6.67%→7.56% t/c (measured), blunt TE** |
+| SU2 Euler, Mach 0.85, α=3° | CL=0.306, CD=0.0067 (on the wrong wing) | **CL=0.154, CD≈+0.0003 to +0.0006** (Euler-only, no viscosity — see §2) |
+| MYSTRAN + VAM-FSD, 150 iter | Mass 72.17 kg, FI 0.8002 | **Mass 9.7165 kg, FI 0.8000** |
+
+**What is not yet re-verified on the corrected geometry:** the §6 aerodynamic shape (washout) sweep and the §7 interpolation plot were both run before this correction, on the old assumed planform — they are kept below as a historical record of the *methodology* (real remeshing + re-solving per candidate) but their numbers should not be read as applying to the real aircraft scale. Re-running that sweep on the corrected geometry is the top open item in §8.
+
+The render images in §2–§6 below (Cp field, Mach slice, deflection plots) are likewise from the pre-correction runs and are kept as illustrations of the *method* until they can be regenerated at the corrected scale — this is stated plainly wherever it applies, not left implicit.
+
+---
+
 ## Table of Contents
 
 1. [Tech Stack at a Glance](#1-tech-stack-at-a-glance)
@@ -44,7 +77,7 @@ Build 2's core chain — **SU2 → spatial transfer → MYSTRAN → VAM-FSD resi
 | Module | Tool | Role | Status |
 |---|---|---|---|
 | 3-D CFD | **SU2 8.5.0** | Outer-loop aerodynamics — real 3-D surface pressure over the wing. | ✅ Installed (isolated `su2_cfd` conda env), validated on a 2-D transonic NACA0012 case, then run on the real 3-D wing (Euler; RANS needs a boundary-layer mesh, not yet built). |
-| Meshing | **gmsh** | 3-D volume mesh around the wing for SU2. | ✅ Working — real planform (span 6 m, chords 4.5/1.5 m, 35° sweep) meshed: 66,433 nodes, 363,058 elements, zero ill-shaped tets. |
+| Meshing | **gmsh** | 3-D volume mesh around the wing for SU2. | ✅ Working — corrected real planform (semi-span 3.0 m, chords 2.688/0.627 m, 26.8° sweep, measured from CAD — see the Geometry Correction section above) meshed: 138,980 nodes, 809,131 elements, zero ill-shaped tets. |
 | FSI transfer | **scipy KD-tree IDW** (MELD substituted) | Maps SU2 surface pressure onto the MYSTRAN structural mesh as a per-element load. | ✅ Working, validated against a physical force check. See §3 for why MELD was substituted. |
 | Structural solver | **MYSTRAN** (pyNastran-driven) | Primary, direct structural analysis — real per-element stress and Tsai–Wu failure index. | ✅ Working — real SU2-derived pressure applied as per-element `PLOAD4`, solved, real displacement/stress recovered. |
 | Resizing engine | **VAM (closed-form)** | Fully-Stressed-Design formula: MYSTRAN's stress field directly drives updated ply thickness/count, per zone. | ✅ Working — a 150-iteration run converges every zone's failure index to the 0.8 target. |
@@ -60,9 +93,15 @@ Build 2's core chain — **SU2 → spatial transfer → MYSTRAN → VAM-FSD resi
 
 **Validation (2-D, before trusting a custom mesh).** A NACA0012 transonic case (Mach 0.8, α = 1.25°) was meshed with gmsh and solved with SU2 Euler: residual converged monotonically (rms[ρ]: −1.0 → −2.45 over 500 iterations), final **CL = 0.282, CD = 0.0188** — physically sane for this classic reference case, no NaN/divergence.
 
-**The real wing (3-D).** A gmsh volume mesh matching the actual planform (semi-span 6 m, root/tip chord 4.5/1.5 m, 35° sweep, NACA2412 section) — 66,433 nodes, 363,058 tetrahedra, zero ill-shaped elements after optimization. SU2 Euler solved it at cruise (Mach 0.85, 10,000 m, α = 3°): **CL = 0.306, CD = 0.0067** (Exit Success, residual −2.51 after 300 iterations).
+**The real wing (3-D), corrected geometry.** A gmsh volume mesh matching the CAD-measured, scaled planform (semi-span 3.0 m, root/tip chord 2.688 m/0.627 m, 26.8° sweep, symmetric ~7% t/c section — see the Geometry Correction section above) — 138,980 nodes, 809,131 tetrahedra, zero ill-shaped elements after optimization.
 
-**Honest gap: Euler, not RANS.** The mesh has no boundary-layer prism layers yet — gmsh's 3-D `BoundaryLayer` field API proved version-finicky (`SurfacesList`/`FacesList` options both raised "Unknown option" errors), so a `Distance`+`Threshold` graded-tet field was used instead: inviscid-appropriate, but not wall-resolved. Euler was the correct first validation target — it doesn't need wall resolution to be physically meaningful — but real viscous drag and boundary-layer separation are not captured yet. This is not a hidden caveat: it directly explains the implausible result flagged in §6.
+**A real bug found and fixed: sharp trailing edge → spurious negative drag.** The first solve on the corrected (smaller, thinner) geometry gave **CD = −0.017**, non-physical for a lifting wing in Euler. Refining the near-wing mesh size (0.15 m → 0.06 m, restoring the same *relative* resolution the old, larger-chord wing had) improved this to −0.0082 but didn't resolve it — refinement alone wasn't the fix. To isolate the cause, the same mesh was solved with two fundamentally different numerical schemes: JST (central-difference) and ROE (upwind). **Both gave essentially the same negative CD**, which rules out a scheme/dissipation problem and points at the geometry itself — specifically, the symmetric-section formula's exactly-zero-thickness trailing edge, mathematically singular and poorly resolved on tet elements at this small absolute scale. The fix: a standard **blunt trailing edge** (5% of local max thickness, an explicit short closing edge between real upper and lower TE points, not a cosmetic constant). After this fix, CD crossed to a small positive value.
+
+**Real, converged result on the corrected + blunt-TE geometry** (Mach 0.85, 10,000 m, α = 3°, Exit Success, residual −3.15 after 300 iterations): **CL = 0.154, CD ≈ +0.0003 to +0.0006** — verified by directly re-reading the converged solution state in a follow-up restart (not read off a possibly-truncated log tail).
+
+**Honest gap #1: Euler, not RANS.** The mesh has no boundary-layer prism layers yet — gmsh's 3-D `BoundaryLayer` field API proved version-finicky (`SurfacesList`/`FacesList` options both raised "Unknown option" errors), so a `Distance`+`Threshold` graded-tet field was used instead: inviscid-appropriate, but not wall-resolved. Real viscous drag has a floor of roughly CD ≈ 0.02 for a wing in this class that pure Euler cannot capture — so **CD ≈ +0.0004 is a real, verified Euler-only result, not a claim about real-world drag.** A viscous CD0 floor is exactly what RANS would add; it is the concrete next step, not an abstract fidelity concern.
+
+**Honest gap #2: the render images below are from the pre-correction (wrong-geometry) run.** They illustrate the method (real ParaView rendering of real SU2 output) but are not the corrected-scale wing. Regenerating them at the corrected scale is an open item (§8).
 
 **Rendered proof, from real SU2 output, not a mockup.** `Pressure_Coefficient` and `Mach` come directly from SU2's own volume solution, rendered in ParaView from the real 2589-point wing surface:
 
@@ -145,7 +184,9 @@ The GRID/CQUAD4/SPC1 geometry cards hash **identically** across the template and
 
 **A real unit-consistency bug found and fixed twice.** The first multi-zone material card used `E/1e6` (MPa) and `ρ/1e12` (tonne/mm³) — an implicit mm-tonne-N-MPa convention — while every GRID coordinate in the same model is in **meters**. This is exactly the kind of silent inconsistency that produces nonsense (it is almost certainly what caused an earlier single-zone test's ~10⁸-meter deflection, flagged honestly at the time). Fixed by using fully SI units (Pa, kg/m³, meters) throughout — verified afterward by mass coming out physically sane (~55–75 kg), not an absurd value.
 
-### 5.2 Real 150-iteration run — box wingbox
+> **Note on §5.2–§5.3 below:** these two runs used the wrong, assumed wing geometry (see the Geometry Correction section above) — they are kept as the real, honest record of how the FSD mechanism and template/archive architecture were built and validated, bug-for-bug. **§5.4 has the corrected, current numbers** (mass 9.7165 kg) on the real CAD-derived, scaled geometry.
+
+### 5.2 Real 150-iteration run — box wingbox (pre-correction geometry)
 
 A 5-zone rectangular wingbox (`build_multizone_wingbox.py`, independent PCOMP per zone) was run for a full 150 iterations, deliberately started from an under-built 4-ply/zone/angle design so both resizing mechanisms would have real work to do:
 
@@ -166,7 +207,7 @@ A 5-zone rectangular wingbox (`build_multizone_wingbox.py`, independent PCOMP pe
 
 ![Early transient: the one real ply-count change, at iteration 1](aerostructural_su2_mystran/renders/09_production_run_early_transient.png)
 
-### 5.3 Correction: re-run on the real airfoil shape, not a rectangular box
+### 5.3 First correction: re-run on an airfoil shape, not a rectangular box (still pre-CAD-scale geometry)
 
 Everything in §5.2 used a **rectangular-box wingbox approximation** — a legitimate stand-in for validating the mechanism, but not the actual wing shape. Two further problems were caught and fixed here, stated plainly: (1) a CAD-derived reference file provided for this project was checked and found to be a **~0.8 m × 0.6 m composite skin panel** — a different, much smaller test article, not the full wing, and was **not** used as if it were; (2) the box approximation itself wasn't the real wing shape either. The fix: build a genuine **NACA2412 airfoil-shaped shell**, matching the SU2 mesh's exact geometry formula (same span, taper, sweep — `build_wing_shell.py`), and re-run the full structural optimization on it.
 
@@ -187,7 +228,32 @@ Because the real airfoil-shaped structure has genuinely different local stiffnes
 
 ![FSD stress-ratio convergence detail](aerostructural_su2_mystran/renders/07_fsd_convergence.png)
 
+### 5.4 Final correction: real CAD-derived geometry, scaled to the real aircraft — the current, correct result
+
+§5.2 and §5.3 both used the assumed 6 m-semispan, 4.5 m/1.5 m-chord, cambered-NACA2412 planform, never checked against the real CAD. Once that was caught (see the Geometry Correction section at the top of this document) and fixed — real CAD-measured, symmetric-section geometry scaled to a 3.0 m semi-span, plus the blunt-TE fix from §2 applied to the shell mesh too — the full SU2 → transfer → MYSTRAN → FSD chain was re-run end to end.
+
+**Real mesh**: 693 nodes, 672 CQUAD4 elements, 8 independent spanwise zones (up from 660/640 in §5.3 — the blunt TE adds one node/edge per span station).
+
+**Real 150-iteration result** (0 MYSTRAN failures, 390.9 s total, 2.61 s/iteration):
+
+| | Value |
+|---|---|
+| Starting mass (iter 0) | 16.63 kg |
+| **Final mass** | **9.7165 kg** |
+| Final global max FI | **0.8000** |
+| Final mean FI | 0.3128 |
+| Final ply count per zone | [4, 4, 4, 4, 4, 4, 4, **5**] — only zone 7 (tip) needed an extra ply |
+| Final thickness scale per zone | **0.321× to 0.836×** |
+
+Full per-iteration log: [`aerostructural_su2_mystran/sample_logs/structural_optimization_log_corrected.csv`](aerostructural_su2_mystran/sample_logs/structural_optimization_log_corrected.csv).
+
+**This is the real, current, correct structural mass for one wing shell of the actual aircraft** — an order of magnitude lighter than the pre-correction 72.17 kg, consistent with the wing being roughly half the linear scale (3.0 m vs 6.0 m semi-span) and substantially thinner in chord (2.688 m vs 4.5 m root) than the wrong assumed geometry. This number, not the ones in §5.2/§5.3, is the one that should be used for any downstream mass-budget or performance estimate.
+
+The zone-by-zone sizing is real and physically driven (not five/eight copies of the same number): the tip zone needed the only extra ply, and thickness scales vary by a real 2.6× spread across the span, reflecting genuinely different local loading on the corrected planform.
+
 ## 6. Aerodynamic Shape Optimization — Washout Sweep
+
+> **This entire section predates the geometry correction** (Geometry Correction section, top of document) **and the trailing-edge fix (§2).** It used the wrong assumed 6 m-semispan planform and the original sharp-TE geometry. It is kept below as the honest, real record of the sweep *methodology* (genuine remeshing + re-solving per candidate, not interpolation) — the CL/CD/L-D numbers themselves apply to the wrong-scale wing and should not be used for the real aircraft. Re-running this sweep on the corrected, blunt-TE geometry is the top item in §8.
 
 Alongside the structural fix, a genuine **outer aerodynamic shape-optimization loop** was built and run — not just a frozen-pressure structural loop. The design variable is **spanwise twist (washout)**: `generate_wing_mesh.py` rotates each spanwise airfoil section about its local quarter-chord point by a linearly-varying twist angle before lofting, so changing this parameter genuinely changes the 3-D shape, requiring a fresh gmsh mesh and a fresh SU2 solve for every candidate — real remeshing and re-solving, not an interpolated guess.
 
@@ -209,6 +275,8 @@ Alongside the structural fix, a genuine **outer aerodynamic shape-optimization l
 **Also an honest limitation of the sweep itself:** α was held fixed at 3° for all four candidates rather than re-trimmed to a constant CL, so this is a **screening comparison at a fixed operating point**, not a fully rigorous multipoint-trimmed shape optimization. The −2°/−4° comparison (both aerodynamically reasonable, both L/D ≈ 39–40) is the credible part of this result; the −6° point should be re-examined with RANS before drawing any real conclusion from it.
 
 ## 7. Result Interpolation — Reading Between the Real Points
+
+> **This section also predates the geometry correction** — it interpolates the §6 sweep, so the same caveat applies: real methodology, wrong-scale numbers. Kept as a record of the interpolation approach, to be re-applied once §6 is re-run on the corrected geometry.
 
 The washout sweep in §6 is only **4 real SU2 solves** — genuine data, but sparse. To get a clearer read on where the trend actually bottoms out, a **cubic spline** (`scipy.interpolate.CubicSpline`) was fit through the 4 real (twist, CL, CD) points and used to derive a smooth L/D-vs-twist curve between them:
 
@@ -235,7 +303,7 @@ KD-tree/IDW transfer ✅ → MYSTRAN PLOAD4 ✅
 │  VAM FSD formula → per-zone thickness/ply ✅  │
 │         │                                     │
 │         ▼                                     │
-│  converges: FI → 0.800 (box) / 0.8002 (real) ✅│
+│  converges: FI → 0.800 (corrected geometry) ✅ │
 └─────────────────────────────────────────────┘
         │
         ▼
@@ -246,32 +314,43 @@ cached pressure field
 
 **Remaining work, in dependency order:**
 
-1. **Boundary-layer mesh + RANS** (currently Euler) — revisit gmsh's 3-D `BoundaryLayer` field API or an alternative prism-extrusion approach. This is the fix for §6's flagged −6° artifact.
-2. **Wrap the §5 convergence loop in `MDOOptimizer`/`MDOProblem`** so the discrete ply-count/angle search and history logging reuse the existing, Build-1-validated optimizer infrastructure instead of a bespoke standalone loop.
-3. **Add the outer shape-change trigger** (re-run SU2 only when twist/planform actually changes) to close the full nested loop end-to-end automatically.
-4. **Resolve the washout optimum properly** — 2 more real SU2 solves near −2° to −3° (§7), rather than relying on interpolation alone.
-5. Build the Aero-PINN (§1) **only if** a future outer loop needs orders-of-magnitude more shape candidates than SU2 can solve directly — not needed for the loop sizes run so far.
-6. Tune FSD damping / add a tighter convergence tolerance to reduce any residual oscillation in future runs with more varied per-zone loading.
+1. **Re-run the §6 washout sweep and §7 interpolation on the corrected, blunt-TE geometry.** Both currently use the wrong assumed 6 m-semispan planform and predate the TE fix — this is the most urgent open item, since those numbers as-published don't apply to the real aircraft scale.
+2. **Regenerate the §2 render images** (Cp field, Mach slice, top-down views) from the corrected-geometry SU2 solve — the current images are from the pre-correction run and are explicitly flagged as such wherever they appear.
+3. **Boundary-layer mesh + RANS** (currently Euler) — revisit gmsh's 3-D `BoundaryLayer` field API or an alternative prism-extrusion approach. This would replace the Euler-only CD ≈ +0.0004 (§2) with a viscous-accurate number that includes the real CD0 floor.
+4. **Wrap the §5 convergence loop in `MDOOptimizer`/`MDOProblem`** so the discrete ply-count/angle search and history logging reuse the existing, Build-1-validated optimizer infrastructure instead of a bespoke standalone loop.
+5. **Add the outer shape-change trigger** (re-run SU2 only when twist/planform actually changes) to close the full nested loop end-to-end automatically.
+6. **Independently verify the 12.824× CAD-to-real scale factor** against an actual drawing/spec number, rather than the user-supplied semi-span estimate used here (see the Geometry Correction section).
+7. Build the Aero-PINN (§1) **only if** a future outer loop needs orders-of-magnitude more shape candidates than SU2 can solve directly — not needed for the loop sizes run so far.
+8. Tune FSD damping / add a tighter convergence tolerance to reduce any residual oscillation in future runs with more varied per-zone loading.
 
 ## 9. Repository Map & How to Reproduce
 
 ```
 aerostructural_su2_mystran/
-├── generate_wing_mesh.py       # gmsh 3-D volume mesh, incl. tip_washout_deg twist
-├── build_wing_shell.py         # real NACA2412 airfoil-shaped shell BDF (§5.3)
+├── generate_wing_mesh.py       # gmsh 3-D volume mesh, incl. tip_washout_deg twist --
+│                                # geometry constants CORRECTED to real CAD-scaled values
+│                                # (semi-span 3.0m, chords 2.688/0.627m, sweep 26.8deg,
+│                                # symmetric section w/ blunt TE) -- see Geometry Correction
+├── build_wing_shell.py         # airfoil-shaped shell BDF (§5.3/§5.4) -- same corrected
+│                                # geometry constants, kept in sync with generate_wing_mesh.py
 ├── build_multizone_wingbox.py  # simpler box wingbox BDF (§5.2, historical reference)
 ├── fsi_transfer.py             # KD-tree/IDW spatial transfer (§3)
 ├── vam_fsd_resize.py           # closed-form FSD formula module
-├── production_run.py           # 150-iter box wingbox production run + logging
-├── production_run_realshape.py # 150-iter real airfoil shell production run + logging
-├── aero_shape_optimization.py  # real 4-point washout sweep (§6): remesh + SU2 per candidate
+├── production_run.py           # 150-iter box wingbox production run + logging (§5.2, pre-correction)
+├── production_run_realshape.py # 150-iter airfoil shell production run + logging (§5.3, pre-correction)
+├── production_run_corrected.py # 150-iter run on the CORRECTED geometry (§5.4) -- the current,
+│                                # authoritative structural result (mass 9.7165 kg)
+├── aero_shape_optimization.py  # 4-point washout sweep (§6) -- geometry constants already
+│                                # corrected, but NOT YET RE-RUN on them (§8 item 1, open)
 ├── render_su2_wing.py / render_su2_surface_csv.py / plot_*.py   # all plotting/rendering
 ├── sample_logs/                 # lightweight, real per-iteration CSV/JSON logs
-│   ├── structural_optimization_log.csv        # box wingbox, 150 iterations
+│   ├── structural_optimization_log.csv        # box wingbox, 150 iterations (pre-correction)
 │   ├── structural_optimization_log_boxtest.csv
-│   ├── aero_shape_sweep_log.csv                # the 4-point washout sweep, §6/§7 source data
+│   ├── aero_shape_sweep_log.csv                # 4-point washout sweep, §6/§7 (pre-correction)
 │   └── structural_run_config.json
-└── renders/                     # all 12 result plots referenced in this document
+└── renders/                     # 12 result plots referenced in this document (pre-correction
+                                  # SU2 renders in §2 flagged explicitly; §5.4's corrected
+                                  # structural run has no plot yet -- open item)
 
 piml_mdo/
 ├── structures/mystran_runner.py  # MYSTRAN/pyNastran driver (§4) — set_pressure_field,
@@ -313,4 +392,4 @@ python aerostructural_su2_mystran/aero_shape_optimization.py
 
 ---
 
-*Build 2: SU2 (Euler, RANS pending) + KD-tree/IDW transfer + MYSTRAN + VAM-FSD resizing — core chain built, run, and validated with real data. Build 1 (NeuralFoil/VLM + VAM composite beam + COBYLA): [README_Build1.md](README_Build1.md). Hardware: RTX 3060 (6 GB), Ryzen 9 5900HX, 16 GB RAM, WSL2 Ubuntu (16 cores).*
+*Build 2: SU2 (Euler, RANS pending) + KD-tree/IDW transfer + MYSTRAN + VAM-FSD resizing — core chain built, run, and validated with real data on a real, CAD-measured, correctly-scaled wing geometry (semi-span 3.0 m). Build 1 (NeuralFoil/VLM + VAM composite beam + COBYLA): [README_Build1.md](README_Build1.md). Hardware: RTX 3060 (6 GB), Ryzen 9 5900HX, 16 GB RAM, WSL2 Ubuntu (16 cores).*

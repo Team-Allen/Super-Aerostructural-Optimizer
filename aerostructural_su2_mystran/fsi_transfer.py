@@ -160,10 +160,10 @@ def idw_transfer(
 def run_transfer(
     su2_csv: str,
     bdf_path: str,
-    span: float = 6.0,
-    chord_root: float = 4.5,
-    chord_tip: float = 1.5,
-    sweep_deg: float = 35.0,
+    span: float = 3.0,
+    chord_root: float = 2.688,
+    chord_tip: float = 0.627,
+    sweep_deg: float = 26.8,
     freestream_pressure: float = 26436.3,
     align: bool = True,
 ) -> dict:
@@ -218,8 +218,8 @@ if __name__ == "__main__":
     import sys
 
     su2_csv = sys.argv[1] if len(sys.argv) > 1 else "surface_flow_wing.csv"
-    bdf_path = sys.argv[2] if len(sys.argv) > 2 else "wingbox.bdf"
-    # SU2's own reported CL/CD for this run (euler_wing.cfg), for a
+    bdf_path = sys.argv[2] if len(sys.argv) > 2 else "wingbox_wing.bdf"
+    # SU2's own reported CL/CD for this run (euler_wing_wing.cfg), for a
     # sanity-magnitude comparison -- NOT expected to match closely, since the
     # wingbox here only covers ~50% of local chord (box_width_fraction=0.5),
     # not the full wetted surface SU2's CL/CD integrates over.
