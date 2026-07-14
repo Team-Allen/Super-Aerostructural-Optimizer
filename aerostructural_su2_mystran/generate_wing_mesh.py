@@ -80,7 +80,9 @@ def symmetric_coordinates(t_c: float, n_points: int, chord: float) -> np.ndarray
     return loop
 
 
-def build_wing_mesh(output_path: str, n_sections: int = 9, tip_washout_deg: float = 0.0):
+def build_wing_mesh(output_path: str, n_sections: int = 9, tip_washout_deg: float = 0.0,
+                     rans_mode: bool = False, rans_wall_size: float = 0.02,
+                     rans_wall_dist: float = 0.03):
     """Loft a wing surface through spanwise NACA sections, embed in a farfield
     box, and generate an unstructured tet volume mesh with a boundary-layer
     field for RANS wall resolution.
@@ -183,7 +185,29 @@ def build_wing_mesh(output_path: str, n_sections: int = 9, tip_washout_deg: floa
     gmsh.model.mesh.field.setNumber(thresh_field, "SizeMax", MESH_SIZE_FARFIELD)
     gmsh.model.mesh.field.setNumber(thresh_field, "DistMin", CHORD_ROOT * 0.5)
     gmsh.model.mesh.field.setNumber(thresh_field, "DistMax", SEMI_SPAN * 2.0)
-    gmsh.model.mesh.field.setAsBackgroundMesh(thresh_field)
+
+    if rans_mode:
+        # RANS mode: no true anisotropic prism boundary layer -- gmsh 4.15's
+        # 3-D "BoundaryLayer" field genuinely rejects FacesList/SurfacesList
+        # in this OCC-kernel workflow (confirmed by direct API probing, not
+        # an assumption), a known real limitation of gmsh's 3-D BL support.
+        # Instead: a much finer, isotropic near-wall grading (down to
+        # rans_wall_size right at the surface) combined with SOLVER=RANS in
+        # SU2 -- this activates the real viscous stress + turbulence-closure
+        # terms the Euler equations lack, which is the actual physics needed
+        # to damp the shock oscillation found in the Euler campaign (README
+        # Sec8.3), even without a proper y+~1 wall-resolved mesh.
+        wall_thresh = gmsh.model.mesh.field.add("Threshold")
+        gmsh.model.mesh.field.setNumber(wall_thresh, "InField", dist_field)
+        gmsh.model.mesh.field.setNumber(wall_thresh, "SizeMin", rans_wall_size)
+        gmsh.model.mesh.field.setNumber(wall_thresh, "SizeMax", MESH_SIZE_WING)
+        gmsh.model.mesh.field.setNumber(wall_thresh, "DistMin", rans_wall_dist)
+        gmsh.model.mesh.field.setNumber(wall_thresh, "DistMax", rans_wall_dist * 6.0)
+        min_field = gmsh.model.mesh.field.add("Min")
+        gmsh.model.mesh.field.setNumbers(min_field, "FieldsList", [thresh_field, wall_thresh])
+        gmsh.model.mesh.field.setAsBackgroundMesh(min_field)
+    else:
+        gmsh.model.mesh.field.setAsBackgroundMesh(thresh_field)
 
     gmsh.option.setNumber("Mesh.Algorithm3D", 1)  # Delaunay
 
