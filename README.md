@@ -4,18 +4,19 @@
 
 > This repository was re-architected around a new SU2 + MYSTRAN + VAM aerostructural pipeline (this document). The previous NeuralFoil-based conversational design assistant has been preserved, not deleted, under [`archive/legacy-neuralfoil-conversational-assistant/`](archive/legacy-neuralfoil-conversational-assistant/).
 
-This document covers **two distinct builds** of the same pipeline. They are kept strictly separate below so there is no ambiguity about what is real, working code with real results, versus what is the planned next architecture.
+This document covers **two distinct builds** of the same pipeline. Both now have real, executed, converged results — they are kept strictly separate below so there is no ambiguity about which physics/fidelity produced which numbers, not because one is hypothetical.
 
-| | **BUILD 1 — Prototype** | **BUILD 2 — Target Architecture** |
+| | **BUILD 1 — Prototype** | **BUILD 2 — Higher-Fidelity Chain** |
 |---|---|---|
-| Status | ✅ **Complete, working, real converged results** | 📋 **Planned — not yet executed** |
-| Aero | NeuralFoil (2-D strip theory) / OpenAeroStruct VLM (3-D lifting surface, inviscid) | SU2 RANS (real 3-D CFD, viscous, shock-capable) |
-| Structure | VAM composite beam (1-D, closed-form) | MYSTRAN shell FE (per-element, real composite structural analysis) |
-| Coupling | Gauss–Seidel, in-repo | MPhys/MELD FSI transfer |
-| Resizing/optimizer | SciPy COBYLA on VAM-beam output | SciPy COBYLA/DE + VAM Fully-Stressed-Design formula on MYSTRAN output |
+| Status | ✅ **Complete, real converged results** | ✅ **Core chain built, run, and converged with real data** (§13–16); optimizer-wrapping and Aero-PINN acceleration remain open (§17–18) |
+| Aero | NeuralFoil (2-D strip theory) / OpenAeroStruct VLM (3-D lifting surface, inviscid) | **SU2 Euler, real solves** on the real wing geometry (§13); RANS/viscous still open (§20) |
+| Structure | VAM composite beam (1-D, closed-form) | **MYSTRAN shell FE, real solves** — real airfoil-shaped shell mesh, per-element stress (§15–16.2) |
+| Coupling / FSI transfer | Gauss–Seidel, in-repo | **`scipy.spatial.cKDTree` IDW transfer** — MPhys/MELD was planned but found unbuildable (`funtofem` unavailable) and honestly substituted (§14) |
+| Resizing/optimizer | SciPy COBYLA on VAM-beam output, wrapped in `MDOOptimizer` | VAM Fully-Stressed-Design formula + discrete ply search, run standalone (`production_run*.py`) — **not yet wrapped in `MDOOptimizer`** (§17, still open) |
+| Shape optimization | COBYLA over CST/twist (aero+structure coupled) | **Real 4-point washout sweep**, each point independently remeshed and SU2-solved (§16.3) |
 | Where it lives in this doc | **Part I**, §1–§11 | **Part II**, §12–§20 |
 
-**Part I is the only part with real numbers, real plots, and real convergence data — it is what you can run today.** Part II is the fully specified build plan for what replaces it; nothing in Part II should be read as a result until it is executed and moved into a results table, the same discipline Part I already follows.
+**Every number in both parts below came from an actual run** — Build 1's COBYLA convergence, and Build 2's SU2 solves, MYSTRAN solves, and the 150-iteration structural optimization. The genuine gaps still open in Build 2 are named explicitly in §17, §18, and §20 (RANS viscosity, `MDOOptimizer` wrapping, Aero-PINN) — nothing there is disguised as done.
 
 ---
 
